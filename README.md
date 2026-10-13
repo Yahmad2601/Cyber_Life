@@ -15,12 +15,16 @@ npm run dev
 ## What the prototype does
 
 - An isometric three.js version of **Abuja** with three districts: Maitama, the
-  Central Business District and Wuse II. Savanna scrub and Aso Rock surround the city.
-  It has traffic, a blimp and clouds, and the camera drifts on its own when nobody
-  is using it.
-- **Real landmarks** modelled in Blender from the photos in `SourceImages/`:
-  Nigeria Revenue Service, Galaxy Backbone (a two-block campus) and TAJBank.
-- Nine **fictional** placeholder tenants and two demo ministries.
+  Central Business District and Garki. Savanna scrub and Aso Rock surround the city,
+  and the Airport Road runs past the City Gate. It has traffic, a blimp and clouds,
+  and the camera drifts on its own when nobody is using it.
+- **Real landmarks** modelled in Blender from the photos in `SourceImages/`, each
+  with the surroundings seen in the photos:
+  - Organisations you can run drills against: Central Bank of Nigeria, NNPC Towers,
+    World Trade Center, Nigeria Revenue Service, Galaxy Backbone, Ship House
+    (Ministry of Defence) and TAJBank.
+  - Landmarks with information only: the National Mosque and the City Gate.
+- Fictional placeholder tenants (mostly in Maitama, behind the CBD) and two demo ministries.
 - Click a tower to open its panel. Then run a **Phishing** or **BEC** drill: an attack
   packet arcs in, the tower flashes, and an inbox opens. The player clicks the red
   flags and picks a response, then gets a scored debrief. The result feeds back into
@@ -70,7 +74,7 @@ so don't trace or rip buildings from it. Legitimate sources:
 
 ## Branding and legal
 
-Real organisations (NRS, Galaxy Backbone, TAJBank) are modelled from photos, but their staff counts, scores and executive names are demo values.
+Real organisations are modelled from photos, but their staff counts, scores, executive names and some domains are demo values.
 Their names, logos and domains are trademarks, and a phishing simulator that
 features an organisation without its consent is a reputational and legal risk.
 Drills should run only against staff of organisations that have contracted for

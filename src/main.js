@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { MapControls } from 'three/examples/jsm/controls/MapControls.js';
-import { DISTRICTS, ORGS } from './orgs.js';
+import { DISTRICTS, ORGS, PLACES } from './orgs.js';
 import { buildCity } from './city.js';
 import { openDrill } from './drill.js';
 import './style.css';
@@ -59,10 +59,10 @@ controls.addEventListener('start', () => { idle = 0; controls.autoRotate = false
 // ---------- labels ----------
 const labelLayer = document.querySelector('#labels');
 const labels = new Map();
-for (const o of ORGS) {
+for (const o of PLACES) {
   const el = document.createElement('button');
-  el.className = 'label';
-  el.innerHTML = `<i></i>${o.short}`;
+  el.className = o.landmark ? 'label landmark' : 'label';
+  el.innerHTML = o.landmark ? o.short : `<i></i>${o.short}`;
   el.addEventListener('click', () => select(o.id));
   labelLayer.appendChild(el);
   labels.set(o.id, el);
@@ -144,7 +144,7 @@ function select(id) {
   selected = id;
   restGlow(prev);
   restGlow(id);
-  renderPanel(ORGS.find((o) => o.id === id));
+  renderPanel(PLACES.find((o) => o.id === id));
 }
 function closePanel() {
   const prev = selected;
@@ -155,6 +155,16 @@ function closePanel() {
 
 function renderPanel(o) {
   panel.hidden = false;
+  if (o.landmark) {
+    panel.innerHTML = `
+      <button class="close" aria-label="Close">×</button>
+      <div class="swatch" style="background:#c9a24a"></div>
+      <h2>${o.name}</h2>
+      <p class="meta">Landmark${o.district ? ` · ${DISTRICTS[o.district].name}` : ''}</p>
+      <p class="blurb">${o.blurb}</p>`;
+    panel.querySelector('.close').addEventListener('click', closePanel);
+    return;
+  }
   panel.innerHTML = `
     <button class="close" aria-label="Close">×</button>
     <div class="swatch" style="background:${o.color}"></div>

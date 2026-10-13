@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { CELL, DISTRICTS, ORGS, ASO_ROCK, orgCells, orgCenter } from './orgs.js';
+import { CELL, DISTRICTS, PLACES, ASO_ROCK, AIRPORT_ROAD, orgCells, orgCenter } from './orgs.js';
 
 const UNIT = 3; // world units per window-texture tile
 const PALETTE = ['#f4e1c1', '#e9c4a6', '#cfe0e8', '#d8d0e8', '#f2d7d9', '#c9dcc5', '#f0e6b8', '#e4e1dc'];
@@ -217,6 +217,10 @@ function cellToWorld(i, j) {
 
 function buildOrg(o) {
   const g = new THREE.Group();
+  const [x, z] = orgCenter(o);
+  g.position.set(x, o.position ? o.position[1] : 0.3, z);
+  // Landmarks have no procedural stand-in; they appear once their model loads.
+  if (o.landmark) return { org: o, group: g, top: 10, sign: null };
   const top = ARCHETYPES[o.type](o, g);
   const sign = new THREE.Mesh(
     new THREE.PlaneGeometry(6, 1.5),
@@ -225,8 +229,6 @@ function buildOrg(o) {
   sign.position.y = top + 1.4;
   sign.rotation.y = Math.PI / 4;
   g.add(sign);
-  const [x, z] = orgCenter(o);
-  g.position.set(x, 0.3, z);
   g.traverse((m) => (m.userData.orgId = o.id));
   return { org: o, group: g, top, sign };
 }
@@ -236,8 +238,8 @@ function buildOrg(o) {
 export function buildCity(scene) {
   const tickers = [];
   const orgEntries = new Map();
-  const occupied = new Set(ORGS.flatMap((o) => orgCells(o).map((c) => c.join(','))));
-  const spans = ORGS.filter((o) => o.span);
+  const occupied = new Set(PLACES.flatMap((o) => orgCells(o).map((c) => c.join(','))));
+  const spans = PLACES.filter((o) => o.span);
 
   // Abuja is inland: savanna ground instead of water.
   const ground = new THREE.Mesh(
@@ -265,23 +267,24 @@ export function buildCity(scene) {
         if (!occupied.has(`${i},${j}`)) fillBlock(scene, i, j, d);
       }
     }
-    // Multi-block campuses pave over the road between their blocks; keep cars off it.
-    const blocked = spans
-      .filter((o) => o.district === Object.keys(DISTRICTS).find((k) => DISTRICTS[k] === d))
-      .flatMap((o) => {
-        const [sx, sy] = o.span;
-        const [cx, cz] = orgCenter(o);
-        const plate = mesh(new THREE.BoxGeometry(sx * CELL - 3.6, 0.3, sy * CELL - 3.6), flatMat(d.color));
-        plate.position.set(cx, 0.15, cz);
-        scene.add(plate);
-        return Array.from({ length: sx - 1 }, (_, k) => (o.cell[0] + k + 0.5) * CELL);
-      });
+    // Multi-block campuses pave over the roads inside them; keep cars off those roads.
+    const blocked = { x: [], z: [] };
+    for (const o of spans.filter((o) => DISTRICTS[o.district] === d)) {
+      const [sx, sy] = o.span;
+      const [cx, cz] = orgCenter(o);
+      const plate = mesh(new THREE.BoxGeometry(sx * CELL - 3.6, 0.3, sy * CELL - 3.6), flatMat(d.color));
+      plate.position.set(cx, 0.15, cz);
+      scene.add(plate);
+      for (let k = 0; k < sx - 1; k++) blocked.x.push((o.cell[0] + k + 0.5) * CELL);
+      for (let k = 0; k < sy - 1; k++) blocked.z.push((o.cell[1] + k + 0.5) * CELL);
+    }
     spawnCars(scene, d, tickers, blocked);
   }
 
   addOutskirts(scene);
+  addAirportRoad(scene, tickers);
 
-  for (const o of ORGS) {
+  for (const o of PLACES) {
     const entry = buildOrg(o);
     scene.add(entry.group);
     orgEntries.set(o.id, entry);
@@ -304,7 +307,7 @@ export function buildCity(scene) {
 
 function fillBlock(scene, i, j, d) {
   const c = cellToWorld(i, j);
-  if (rand() < 0.12) {
+  if (rand() < (d.parks ?? 0.12)) {
     // pocket park
     for (let k = 0; k < 6; k++) {
       const x = c.x + range(-4, 4);
@@ -331,14 +334,14 @@ function fillBlock(scene, i, j, d) {
   }
 }
 
-function spawnCars(scene, d, tickers, blockedX = []) {
+function spawnCars(scene, d, tickers, blocked = { x: [], z: [] }) {
   const [i0, i1] = d.i;
   const [j0, j1] = d.j;
   const xMin = (i0 - 0.5) * CELL, xMax = (i1 + 0.5) * CELL;
   const zMin = (j0 - 0.5) * CELL, zMax = (j1 + 0.5) * CELL;
   const xLines = [], zLines = [];
-  for (let i = i0; i < i1; i++) if (!blockedX.includes((i + 0.5) * CELL)) xLines.push((i + 0.5) * CELL);
-  for (let j = j0; j < j1; j++) zLines.push((j + 0.5) * CELL);
+  for (let i = i0; i < i1; i++) if (!blocked.x.includes((i + 0.5) * CELL)) xLines.push((i + 0.5) * CELL);
+  for (let j = j0; j < j1; j++) if (!blocked.z.includes((j + 0.5) * CELL)) zLines.push((j + 0.5) * CELL);
 
   for (let k = 0; k < 7; k++) {
     const alongX = rand() < 0.5 && zLines.length;
@@ -451,9 +454,37 @@ async function trySwapModel(entry) {
   entry.group.clear();
   entry.group.add(model);
   // Real landmarks carry their own signage in the model.
-  if (!entry.org.real) {
+  if (entry.sign && !entry.org.real) {
     entry.sign.position.y = entry.top + 1.4;
     entry.group.add(entry.sign);
+  }
+}
+
+// Airport Road: dual carriageway out of the city's south edge, past the City Gate.
+function addAirportRoad(scene, tickers) {
+  const { x, z0, z1 } = AIRPORT_ROAD;
+  const len = z1 - z0;
+  const road = mesh(new THREE.BoxGeometry(6, 0.4, len), flatMat('#6b6e73'));
+  road.position.set(x, -0.4, z0 + len / 2);
+  scene.add(road);
+  const median = mesh(new THREE.BoxGeometry(0.5, 0.5, len), flatMat('#cfc8b8'));
+  median.position.set(x, -0.35, z0 + len / 2);
+  scene.add(median);
+  for (let k = 0; k < 6; k++) {
+    const dir = k % 2 ? 1 : -1;
+    const car = mesh(new THREE.BoxGeometry(0.9, 0.8, 1.6), flatMat(pick(CAR_COLORS)));
+    const cab = mesh(new THREE.BoxGeometry(0.8, 0.5, 0.8), flatMat('#cfe3f0'));
+    cab.position.y = 0.6;
+    car.add(cab);
+    let p = range(z0, z1);
+    const speed = range(9, 14) * dir;
+    scene.add(car);
+    tickers.push((dt) => {
+      p += speed * dt;
+      if (p > z1) p = z0;
+      if (p < z0) p = z1;
+      car.position.set(x + dir * 1.5, 0.2, p);
+    });
   }
 }
 
@@ -468,6 +499,8 @@ function addOutskirts(scene) {
     const r = range(105, 300);
     const x = Math.cos(a) * r * 1.1, z = Math.sin(a) * r;
     if (Math.abs(x) < 85 && Math.abs(z) < 72) continue;
+    if (Math.abs(x - AIRPORT_ROAD.x) < 6 && z > 60) continue; // road
+    if (x > -26 && x < 8 && z > 84 && z < 116) continue; // City Gate plaza
     const s = range(0.7, 1.4);
     const trunk = mesh(trunkGeo, trunkMat);
     trunk.position.set(x, 0.1, z);

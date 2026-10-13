@@ -1,2 +1,25 @@
-node_modules
-dist
+# Dependencies & build output
+node_modules/
+dist/
+
+# Reference photos used for modelling (third-party / Street View imagery, large)
+SourceImages/
+
+# Blender auto-backups and temp files (the .blend itself is kept)
+*.blend1
+*.blend2
+*.blend@
+
+# Local editor / agent config
+.claude/
+.vscode/
+.idea/
+
+# Logs, env and OS junk
+*.log
+npm-debug.log*
+.env
+.env.*
+.DS_Store
+Thumbs.db
+desktop.ini

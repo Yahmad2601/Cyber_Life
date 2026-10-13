@@ -31,6 +31,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   box-shadow: 0 2px 8px rgba(31, 42, 51, 0.12);
 }
 .label i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.label.landmark { font-weight: 500; font-style: italic; color: var(--muted); background: rgba(255, 252, 246, 0.8); }
+.blurb { font-size: 14px; line-height: 1.5; margin: 14px 0 0; }
 
 #panel {
   position: fixed; top: 20px; right: 20px; width: 320px; max-height: calc(100% - 40px); overflow: auto;

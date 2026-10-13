@@ -30,21 +30,30 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 MODELS = os.path.normpath(os.path.join(HERE, "..", "public", "models"))
 CELL = 14  # keep in sync with src/orgs.js
 
-# Mirror of src/orgs.js placement, used only for the Blender overview: id -> (i, j, span_x)
+# Mirror of src/orgs.js placement, used only for the Blender overview:
+# id -> (i, j, span_x, span_y)
 LAYOUT = {
-    "nrs": (0, 0, 1),
-    "galaxy-backbone": (2, 0, 2),
-    "reserve-authority": (-2, 0, 1),
-    "min-finance": (-4, 1, 1),
-    "min-digital": (5, 0, 1),
-    "taj-bank": (-1, -3, 1),
-    "atlantic-trust": (-4, -3, 1),
-    "maitama-capital": (2, -3, 1),
-    "zuma-mutual": (4, -2, 1),
-    "naira-pay": (-3, 3, 1),
-    "savanna-tel": (0, 3, 1),
-    "delta-energy": (3, 3, 1),
+    # Central Business District
+    "national-mosque": (-4, -1, 2, 2),
+    "cbn": (-2, -1, 2, 1),
+    "nnpc": (0, -1, 2, 2),
+    "nrs": (4, -1, 1, 1),
+    "wtc": (2, 0, 2, 1),
+    "galaxy-backbone": (2, 1, 2, 1),
+    "min-finance": (-4, 1, 1, 1),
+    "min-digital": (5, 0, 1, 1),
+    # Maitama
+    "taj-bank": (-1, -3, 1, 1),
+    "atlantic-trust": (-4, -3, 1, 1),
+    "maitama-capital": (2, -3, 1, 1),
+    "zuma-mutual": (4, -2, 1, 1),
+    "naira-pay": (-2, -4, 1, 1),
+    "savanna-tel": (1, -4, 1, 1),
+    "delta-energy": (4, -4, 1, 1),
+    # Garki
+    "ship-house": (-1, 3, 3, 1),
 }
+CITY_GATE_POS = (-9.0, -100.0, 0.0)  # Blender coords of three.js (-9, 0, 100)
 ASO_ROCK_POS = (-115.0, 125.0, -0.6)  # Blender coords of three.js (-115, -0.6, -125)
 
 
@@ -113,6 +122,7 @@ class Builder:
     def __init__(self):
         self.bm = bmesh.new()
         self.mats = []
+        self.T = Matrix()  # applied to everything added; set it to build rotated sub-assemblies
 
     def _paint(self, verts, m):
         if m not in self.mats:
@@ -123,25 +133,26 @@ class Builder:
 
     def box(self, sx, sy, sz, x, y, z, m, rz=0.0, rx=0.0):
         """Box whose bottom sits at z."""
-        mat = Matrix.Translation((x, y, z + sz / 2)) @ Matrix.Rotation(rz, 4, "Z") @ Matrix.Rotation(rx, 4, "X") @ Matrix.Diagonal((sx, sy, sz, 1))
+        mat = self.T @ Matrix.Translation((x, y, z + sz / 2)) @ Matrix.Rotation(rz, 4, "Z") @ Matrix.Rotation(rx, 4, "X") @ Matrix.Diagonal((sx, sy, sz, 1))
         self._paint(bmesh.ops.create_cube(self.bm, size=1.0, matrix=mat)["verts"], m)
 
     def cyl(self, r1, r2, h, x, y, z, m, seg=8, rz=0.0, rx=0.0):
         """Cylinder/cone whose base sits at z (before rx tilt)."""
-        mat = Matrix.Translation((x, y, z)) @ Matrix.Rotation(rz, 4, "Z") @ Matrix.Rotation(rx, 4, "X") @ Matrix.Translation((0, 0, h / 2))
+        mat = self.T @ Matrix.Translation((x, y, z)) @ Matrix.Rotation(rz, 4, "Z") @ Matrix.Rotation(rx, 4, "X") @ Matrix.Translation((0, 0, h / 2))
         self._paint(bmesh.ops.create_cone(self.bm, cap_ends=True, cap_tris=False, segments=seg, radius1=r1, radius2=r2, depth=h, matrix=mat)["verts"], m)
 
-    def beam(self, p0, p1, t, m):
-        p0, p1 = Vector(p0), Vector(p1)
+    def beam(self, p0, p1, t, m, t2=None):
+        p0, p1 = self.T @ Vector(p0), self.T @ Vector(p1)
         d = p1 - p0
         up = "X" if abs(d.normalized().y) > 0.99 else "Y"
         rot = d.to_track_quat("Z", up).to_matrix().to_4x4()
-        mat = Matrix.Translation((p0 + p1) / 2) @ rot @ Matrix.Diagonal((t, t, d.length, 1))
+        mat = Matrix.Translation((p0 + p1) / 2) @ rot @ Matrix.Diagonal((t, t2 or t, d.length, 1))
         self._paint(bmesh.ops.create_cube(self.bm, size=1.0, matrix=mat)["verts"], m)
 
     def prism(self, pts, h, m, mat=Matrix()):
         """Extrude a CCW polygon (local XY) by h along local Z, then transform."""
         bm = self.bm
+        mat = self.T @ mat
         bot = [bm.verts.new(mat @ Vector((px, py, 0))) for px, py in pts]
         top = [bm.verts.new(mat @ Vector((px, py, h))) for px, py in pts]
         n = len(pts)
@@ -152,14 +163,20 @@ class Builder:
         self._paint(bot + top, m)
 
     def dome(self, r, x, y, z, m, seg=16):
-        vs = bmesh.ops.create_uvsphere(self.bm, u_segments=seg, v_segments=seg // 2, radius=r, matrix=Matrix.Translation((x, y, z)))["verts"]
-        bmesh.ops.delete(self.bm, geom=[v for v in vs if v.co.z < z - 1e-4], context="VERTS")
-        self._paint([v for v in vs if v.is_valid], m)
+        vs = bmesh.ops.create_uvsphere(self.bm, u_segments=seg, v_segments=seg // 2, radius=r)["verts"]
+        bmesh.ops.delete(self.bm, geom=[v for v in vs if v.co.z < -1e-4], context="VERTS")
+        vs = [v for v in vs if v.is_valid]
+        bmesh.ops.transform(self.bm, matrix=self.T @ Matrix.Translation((x, y, z)), verts=vs)
+        self._paint(vs, m)
+
+    def sphere(self, r, x, y, z, m, sx=1.0, sy=1.0, sz=1.0, seg=10):
+        mat = self.T @ Matrix.Translation((x, y, z)) @ Matrix.Diagonal((sx, sy, sz, 1))
+        self._paint(bmesh.ops.create_uvsphere(self.bm, u_segments=seg, v_segments=max(4, seg // 2), radius=r, matrix=mat)["verts"], m)
 
     def text(self, body, size, x, y, z, m, bold=True, depth=0.12, rz=0.0):
         """Upright extruded text facing -Y, left edge at x, baseline at z."""
         me, w = _text_mesh(body, size, depth, bold)
-        me.transform(Matrix.Translation((x, y, z)) @ Matrix.Rotation(rz, 4, "Z") @ Matrix.Rotation(math.pi / 2, 4, "X"))
+        me.transform(self.T @ Matrix.Translation((x, y, z)) @ Matrix.Rotation(rz, 4, "Z") @ Matrix.Rotation(math.pi / 2, 4, "X"))
         n0 = len(self.bm.verts)
         self.bm.from_mesh(me)
         self.bm.verts.ensure_lookup_table()
@@ -168,6 +185,7 @@ class Builder:
         return w
 
     def finish(self, name, coll):
+        bmesh.ops.recalc_face_normals(self.bm, faces=self.bm.faces[:])
         me = bpy.data.meshes.new(name)
         self.bm.to_mesh(me)
         self.bm.free()
@@ -197,12 +215,65 @@ def flagpole(b, x, y, h, colors, w=1.2):
 NIGERIA = ["#008751", "#ffffff", "#008751"]
 
 
-def star(r, inner=0.42):
+def star(r, inner=0.42, points=5):
+    n = points * 2
     return [
-        ((r if i % 2 == 0 else r * inner) * math.cos(math.pi / 2 + i * math.pi / 5),
-         (r if i % 2 == 0 else r * inner) * math.sin(math.pi / 2 + i * math.pi / 5))
-        for i in range(10)
+        ((r if i % 2 == 0 else r * inner) * math.cos(math.pi / 2 + i * 2 * math.pi / n),
+         (r if i % 2 == 0 else r * inner) * math.sin(math.pi / 2 + i * 2 * math.pi / n))
+        for i in range(n)
     ]
+
+
+def chamfer_rect(w, d, c):
+    x, y = w / 2, d / 2
+    return [(-x + c, -y), (x - c, -y), (x, -y + c), (x, y - c), (x - c, y), (-x + c, y), (-x, y - c), (-x, -y + c)]
+
+
+def rounded_rect(w, d, n=28, k=0.6):
+    """Superellipse outline (CCW); k < 1 squares it off."""
+    pts = []
+    for i in range(n):
+        t = 2 * math.pi * i / n
+        c, s = math.cos(t), math.sin(t)
+        pts.append((w / 2 * math.copysign(abs(c) ** k, c), d / 2 * math.copysign(abs(s) ** k, s)))
+    return pts
+
+
+# ---------------------------------------------------------------- vegetation & street furniture
+
+def round_tree(b, x, y, s=1.0, z=0.0, col="#5f8f45"):
+    b.cyl(0.18 * s, 0.14 * s, 1.6 * s, x, y, z, M("#7a5c3e"), seg=6)
+    b.sphere(1.5 * s, x, y, z + 2.5 * s, M(col), sz=0.85, seg=8)
+
+
+def palm(b, x, y, h=6.0, z=0.0):
+    top = Vector((x + 0.3, y + 0.15, z + h))
+    b.beam((x, y, z), top, 0.28, M("#8a7458"))
+    for k in range(8):
+        a = k * 2 * math.pi / 8 + 0.2
+        mid = top + Vector((math.cos(a) * 1.2, math.sin(a) * 1.2, 0.35))
+        tip = top + Vector((math.cos(a) * 2.5, math.sin(a) * 2.5, -1.0))
+        b.beam(top, mid, 0.55, M("#3f7a3a"), t2=0.1)
+        b.beam(mid, tip, 0.45, M("#3f7a3a"), t2=0.08)
+
+
+def pine(b, x, y, h=7.0, z=0.0):
+    """Norfolk Island pine: tiered, very common around Abuja offices."""
+    b.cyl(0.16, 0.08, h, x, y, z, M("#6b5038"), seg=5)
+    for k in range(5):
+        r = 1.5 * (1 - k / 5.5)
+        b.cyl(r, 0.1, 0.9, x, y, z + 1.6 + k * (h - 2.2) / 5, M("#2f5d3a"), seg=7)
+
+
+def cypress(b, x, y, h=6.0, z=0.0):
+    b.cyl(0.12, 0.1, 0.8, x, y, z, M("#6b5038"), seg=5)
+    b.sphere(0.85, x, y, z + 0.6 + h / 2, M("#3d6b35"), sz=h / 1.7, seg=8)
+
+
+def agave(b, x, y, z=0.0, s=1.0):
+    for k in range(6):
+        a = k * math.pi / 3
+        b.beam((x, y, z), (x + math.cos(a) * 0.7 * s, y + math.sin(a) * 0.7 * s, z + 0.9 * s), 0.18 * s, M("#4f7a4a"), t2=0.05)
 
 
 def lattice_mast(b, x, y, z, h, base, top, m, t=0.09, step=1.4):
@@ -423,6 +494,414 @@ def galaxy_backbone(coll):
     b.finish("galaxy-backbone_Building", coll)
 
 
+def city_gate(coll):
+    """Abuja City Gate on the airport expressway, with its plaza, fountain and flag rows."""
+    b = Builder()
+    white, shade = M("#f4f2ec"), M("#dedad1")
+    pave, lawn, cream = M("#d9cdb4"), M("#7fa24f"), M("#ece4d2")
+    D = 1.6
+
+    # plaza, lawns, steps
+    b.box(26, 24, 0.2, 0, 0, 0, pave)
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            b.box(7.5, 6.0, 0.24, sx * 8.5, sy * 6.5, 0, lawn)
+    for k in range(3):
+        b.box(10 - k * 2, 0.5, 0.2 + k * 0.08, 0, -11.75 + k * 0.5, 0, cream)
+
+    def pillar(s, top, fx, fz):
+        x_out, x_in = s * 4.5, s * 3.0
+        b.box(1.5, D, top, s * 3.75, 0, 0, white)
+        b.box(0.9, D * 0.9, 1.0, s * 3.45, 0, top, white)  # stepped cap
+        # concave flare sweeping outward to the ground, extruded through the depth
+        prof = [(0.0, 0.0), (fx, 0.0)] + [(fx * (1 - t / 10) ** 2, fz * t / 10) for t in range(1, 10)] + [(0.0, fz)]
+        b.prism(prof, D, white, Matrix(((s, 0, 0, x_out), (0, 0, 1, -D / 2), (0, 1, 0, 0), (0, 0, 0, 1))))
+        # secondary blade on the opening side
+        b.prism([(0.0, 0.0), (1.1, 0.0), (0.0, fz * 0.55)], D * 0.7, shade,
+                Matrix(((-s, 0, 0, x_in), (0, 0, 1, -D * 0.35), (0, 1, 0, 0), (0, 0, 0, 1))))
+        # plinth
+        b.box(fx + 2.2, D + 0.6, 0.3, s * (3.0 + (fx + 1.5) / 2), 0, 0.2, shade)
+
+    pillar(-1, 15.0, 5.0, 10.0)
+    pillar(1, 19.0, 6.2, 12.5)
+
+    # lintel with "YOU ARE WELCOME" and the coat of arms, front and back
+    b.box(6.0, D * 0.9, 2.8, 0, 0, 8.2, white)
+    green = M("#1e7a3c")
+    w = text_width("YOU ARE WELCOME", 0.42)
+    b.text("YOU ARE WELCOME", 0.42, -w / 2, -D * 0.45 - 0.02, 8.55, green)
+    b.text("YOU ARE WELCOME", 0.42, w / 2, D * 0.45 + 0.02, 8.55, green, rz=math.pi)
+    yf = -D * 0.45 - 0.05
+    b.box(1.4, 0.06, 0.16, 0, yf, 9.2, green)                  # grassy base
+    b.box(0.55, 0.08, 0.7, 0, yf - 0.02, 9.36, M("#1d1d1d"))   # black shield
+    b.beam((-0.18, yf - 0.07, 9.95), (0, yf - 0.07, 9.7), 0.07, white)
+    b.beam((0.18, yf - 0.07, 9.95), (0, yf - 0.07, 9.7), 0.07, white)
+    b.beam((0, yf - 0.07, 9.7), (0, yf - 0.07, 9.42), 0.07, white)
+    for sx in (-1, 1):
+        b.box(0.22, 0.06, 0.65, sx * 0.45, yf, 9.36, white)    # supporting horses
+    b.box(0.5, 0.06, 0.28, 0, yf, 10.1, M("#c62828"))         # eagle
+
+    # the flag, held between the pillars by cables
+    for i, c in enumerate(NIGERIA):
+        b.box(0.6, 0.05, 1.3, -0.6 + i * 0.6, 0, 12.4, M(c))
+    cable = M("#d0d0d0")
+    for (fx_, fz_), (px, pz) in (((-0.9, 13.7), (-3.0, 14.4)), ((-0.9, 12.4), (-3.0, 11.3)),
+                                 ((0.9, 13.7), (3.0, 16.6)), ((0.9, 12.4), (3.0, 11.3))):
+        b.beam((fx_, 0, fz_), (px, 0, pz), 0.05, cable)
+
+    # fountain behind the gate (city side) and rows of flagpoles
+    b.cyl(2.3, 2.3, 0.5, 0, 7.0, 0, cream, seg=20)
+    b.cyl(2.0, 2.0, 0.52, 0, 7.0, 0.02, M("#7fc4e0", 0.2), seg=20)
+    b.cyl(0.35, 0.05, 6.5, 0, 7.0, 0.5, M("#bfe3f2", 0.2), seg=10)
+    flag_cols = [NIGERIA, ["#ffffff", "#1565c0", "#ffffff"], ["#fdd835", "#2e7d32", "#c62828"], ["#1565c0", "#ffffff", "#c62828"]]
+    for i, x in enumerate(range(-12, 13, 3)):
+        flagpole(b, x, 10.8, 6.5, flag_cols[i % len(flag_cols)], w=0.9)
+
+    # planting
+    for x, y in ((-2.4, -6.0), (2.4, -6.0), (-5.5, 3.0), (5.5, 3.0)):
+        agave(b, x, y, 0.24)
+    for x, y in ((-11.5, -10.5), (11.5, -10.5), (-11.5, 3.0), (11.5, 3.0)):
+        round_tree(b, x, y, s=1.1)
+    b.finish("city-gate_Monument", coll)
+
+
+def national_mosque(coll):
+    """Abuja National Mosque: golden dome, four minarets, courtyard in front (-Y)."""
+    b = Builder()
+    sand, sand2, cream, terra = M("#d8c39a"), M("#c9ad80"), M("#f0e4cc"), M("#b5653e")
+    tile, gold, green, tan = M("#2c6e73"), M("#e0aa2a", 0.35), M("#3e8f6a"), M("#dcb878")
+    pave, pave2, dark = M("#e7c793"), M("#c98a5a"), M("#3a3330")
+    FY = -10.2  # front wall line
+
+    # platform + patterned courtyard
+    b.box(24, 22, 0.6, 0, 0.8, 0, cream)
+    b.box(22.4, 10.0, 0.08, 0, -5.1, 0.6, pave)
+    for cx in (-5.5, 5.5):
+        b.prism(star(2.0, 0.6, points=8), 0.05, pave2, Matrix.Translation((cx, -2.0, 0.66)))
+    for x in (-8.5, 0.0, 8.5):
+        b.box(0.6, 10.0, 0.05, x, -5.1, 0.66, pave2)
+    b.box(22.4, 0.6, 0.05, 0, -5.1, 0.66, pave2)
+
+    # arcaded perimeter walls with pointed-arch recesses and crenellations
+    def arcade(x0, y0, x1, y1):
+        L = math.hypot(x1 - x0, y1 - y0)
+        b.T = Matrix.Translation((x0, y0, 0.6)) @ Matrix.Rotation(math.atan2(y1 - y0, x1 - x0), 4, "Z")
+        b.box(L, 0.8, 2.4, L / 2, 0, 0, cream)
+        k = 0.7
+        while k < L - 0.4:
+            b.box(0.7, 0.1, 1.4, k, -0.42, 0.3, terra)
+            b.cyl(0.35, 0.0, 0.5, k, -0.42, 1.7, terra, seg=4, rz=math.pi / 4)
+            b.box(0.35, 0.8, 0.45, k + 0.33, 0, 2.4, cream)
+            k += 1.3
+        b.T = Matrix()
+
+    arcade(-11.6, -0.2, -11.6, FY)
+    arcade(11.6, FY, 11.6, -0.2)
+    arcade(-11.6, FY, -2.4, FY)
+    arcade(2.4, FY, 11.6, FY)
+
+    # front gateway arch + steps
+    b.box(4.6, 1.6, 5.4, 0, FY, 0.6, terra)
+    b.box(3.0, 0.2, 4.0, 0, FY - 0.85, 0.6, cream)
+    b.box(1.8, 0.22, 2.3, 0, FY - 0.9, 0.6, dark)
+    b.cyl(0.9, 0.9, 0.22, 0, FY - 0.79, 2.9, dark, seg=14, rx=math.pi / 2)
+    for k in range(3):
+        b.box(9 - k * 1.6, 0.6, 0.6 - k * 0.2, 0, FY - 1.1 - k * 0.55, 0, cream)
+
+    # main prayer hall
+    HH, HY = 9.0, 5.7
+    b.box(16, 11, HH, 0, HY, 0.6, sand)
+    for x in (-6.6, -4.0, 4.0, 6.6):
+        b.box(2.3, 0.5, HH - 0.4, x, 0.15, 0.6, sand2)
+    for x in (-5.3, -2.7, 2.7, 5.3):
+        b.box(0.35, 0.55, HH - 1.0, x, 0.15, 1.0, tile)
+    for y in (1.6, 4.3, 7.0, 9.7):
+        b.box(0.5, 2.3, HH - 0.4, 8.15, y, 0.6, sand2)
+    for y in (2.95, 5.65, 8.35):
+        b.box(0.55, 0.35, HH - 1.0, 8.15, y, 1.0, tile)
+    x = -7.6
+    while x <= 7.6:
+        b.box(0.4, 0.4, 0.5, x, 0.3, 0.6 + HH, cream)
+        x += 0.8
+    y = 0.6
+    while y <= 10.8:
+        b.box(0.4, 0.4, 0.5, 7.8, y, 0.6 + HH, cream)
+        y += 0.8
+
+    # tiled portal with the green stepped canopy and gold doors
+    b.box(4.6, 0.8, HH + 0.8, 0, -0.1, 0.6, terra)
+    b.box(4.0, 0.2, HH + 0.3, 0, -0.58, 0.6, tile)
+    b.box(3.0, 0.2, HH - 0.6, 0, -0.72, 0.6, cream)
+    b.box(1.4, 0.1, 2.4, 0, -0.86, 0.6, gold)
+    for k in range(4):
+        b.box(2.2 - k * 0.5, 0.35, 0.7, 0, -0.95, 5.4 + k * 0.7, green)
+
+    # drum with gold colonnade, golden dome, finial
+    zt = 0.6 + HH
+    b.cyl(4.4, 4.4, 1.4, 0, HY, zt, cream, seg=24)
+    for k in range(24):
+        a = k * 2 * math.pi / 24
+        b.cyl(0.12, 0.12, 1.2, 4.5 * math.cos(a), HY + 4.5 * math.sin(a), zt + 0.1, gold, seg=6)
+    b.dome(4.4, 0, HY, zt + 1.4, gold, seg=24)
+    b.cyl(0.08, 0.05, 1.6, 0, HY, zt + 5.8, gold, seg=6)
+    b.cyl(0.55, 0.55, 0.08, 0, HY + 0.04, zt + 7.6, gold, seg=14, rx=math.pi / 2)
+    for x, y in ((-6.6, 1.6), (6.6, 1.6), (-6.6, 9.8), (6.6, 9.8)):
+        b.cyl(1.0, 1.0, 0.6, x, y, zt, cream, seg=12)
+        b.dome(1.0, x, y, zt + 0.6, gold, seg=12)
+
+    # four minarets (front pair taller)
+    def minaret(x, y, h):
+        b.box(1.9, 1.9, 6.0, x, y, 0.6, sand2)
+        b.cyl(0.62, 0.55, h * 0.72, x, y, 6.6, tan, seg=14)
+        z1 = 6.6 + h * 0.72
+        b.cyl(0.55, 1.0, 0.6, x, y, z1, cream, seg=14)
+        b.cyl(1.0, 1.0, 0.35, x, y, z1 + 0.6, cream, seg=14)
+        b.cyl(0.48, 0.45, h * 0.12, x, y, z1 + 0.95, tan, seg=14)
+        z2 = z1 + 0.95 + h * 0.12
+        b.cyl(0.48, 0.75, 0.35, x, y, z2, cream, seg=14)
+        b.cyl(0.55, 0.0, 2.2, x, y, z2 + 0.35, cream, seg=14)
+        b.cyl(0.05, 0.03, 1.2, x, y, z2 + 2.55, gold, seg=6)
+
+    minaret(-9.2, 0.2, 34)
+    minaret(9.2, 0.2, 34)
+    minaret(-9.2, 11.2, 29)
+    minaret(9.2, 11.2, 29)
+
+    # courtyard trees in planters + garden trees
+    for x in (-5.5, 5.5):
+        b.box(3.2, 3.2, 0.5, x, -6.0, 0.6, terra)
+        round_tree(b, x, -6.0, s=1.6, z=1.1)
+    for x, y in ((-11.6, -11.4), (11.6, -11.4), (-11.8, 11.6), (11.8, 11.6)):
+        round_tree(b, x, y, s=1.2)
+    b.finish("national-mosque_Mosque", coll)
+
+
+def cbn(coll):
+    """Central Bank of Nigeria: concave front of stepped stone piers and dark-blue glass."""
+    b = Builder()
+    glass, stone, band = M("#2e3f63", 0.3), M("#d9cdb8"), M("#56688f")
+    white, steel = M("#f4f2ec"), M("#c3c8cf")
+    H, L, Dp, a = 34.0, 10.5, 6.0, math.radians(10)
+
+    for s in (-1, 1):
+        b.T = Matrix.Translation((s * 1.5, -1.5, 0)) @ Matrix.Rotation(-s * a, 4, "Z")
+        b.box(L, Dp, H, s * L / 2, Dp / 2, 0, glass)
+        z = 2.6
+        while z < H:
+            b.box(L + 0.05, Dp + 0.05, 0.1, s * L / 2, Dp / 2, z, band)
+            z += 2.6
+        for x in (0.7, 3.6, 6.9, 9.9):
+            b.box(1.6, 0.8, H, s * x, -0.3, 0, stone)
+            b.box(1.0, 0.6, H - 5, s * x, -0.95, 0, stone)
+            b.box(0.5, 0.5, H - 11, s * x, -1.45, 0, stone)
+        b.box(0.8, Dp, H + 0.6, s * (L - 0.4), Dp / 2, 0, stone)
+        b.box(L, Dp, 0.8, s * L / 2, Dp / 2, H, stone)
+        b.T = Matrix()
+
+    # recessed centre bay with the bank's green emblem
+    b.box(3.2, 5.5, H - 1, 0, 1.6, 0, glass)
+    b.box(1.8, 0.2, 2.4, 0, -1.25, 23.0, M("#1f8a4c"))
+    b.box(1.0, 0.22, 1.4, 0, -1.27, 23.5, M("#d4a62a"))
+    b.box(0.45, 0.15, 16.0, 0, -1.2, 5.0, M("#2e9c5e"))
+    for z in range(6, 21, 3):
+        b.box(0.3, 0.17, 0.5, 0, -1.22, z, M("#d4a62a"))
+
+    # roof: plant room, glass pyramid skylight, satellite dishes, mast
+    b.box(4.5, 3.5, 4.0, 0, 3.4, H, white)
+    b.cyl(2.4, 0.2, 2.0, 0, 0.4, H - 1, M("#7fa7c9", 0.2), seg=4, rz=math.pi / 4)
+    for x, y, rz in ((-3.2, 2.0, 0.3), (-4.6, 3.6, -0.4), (3.4, 2.4, 0.5)):
+        b.cyl(0.15, 0.2, 0.9, x, y, H + 0.8, white, seg=6)
+        b.cyl(0.2, 1.2, 0.45, x, y, H + 1.5, white, seg=14, rz=rz, rx=math.radians(55))
+    lattice_mast(b, 1.6, 4.4, H + 4.0, 7.0, 1.0, 0.25, steel)
+
+    # white "sail" sculpture, front trees and flags
+    for k in range(4):
+        b.prism([(0, 0), (2.6, 0), (0.3, 3.4 - k * 0.4)], 0.15, white,
+                Matrix.Translation((7.0 + k * 0.55, -3.6 + k * 0.25, 0)) @ Matrix.Rotation(0.5 - k * 0.15, 4, "Z") @ Matrix.Rotation(math.pi / 2, 4, "X"))
+    for x, y in ((-1.8, -3.6), (0.4, -4.2), (2.6, -3.5)):
+        round_tree(b, x, y, s=1.3)
+    flagpole(b, -4.0, -3.9, 6.0, NIGERIA)
+    flagpole(b, -5.4, -3.6, 6.0, ["#1f8a4c", "#ffffff", "#1f8a4c"])
+    b.finish("cbn_Building", coll)
+
+
+def nnpc(coll):
+    """NNPC Towers: four towers around an octagonal pavilion on a red granite podium."""
+    b = Builder()
+    stone, bronze, silver, granite = M("#cdb9a0"), M("#5b4a3c", 0.3), M("#c9ccd0", 0.35), M("#8e4b3e")
+    red, roofglass, white, ribbon = M("#9c3b2a"), M("#8fa0b0", 0.3), M("#f2f1ec"), M("#3d3530", 0.3)
+
+    b.box(22, 20, 2.5, 0, 0.5, 0, granite)  # common plinth
+
+    def tower(x, y, h, cyl_face):
+        pts = chamfer_rect(8, 7, 1.2)
+        b.prism(pts, h, stone, Matrix.Translation((x, y, 0)))
+        z = 5.0
+        while z < h - 2:
+            b.prism([(px * 1.01, py * 1.01) for px, py in pts], 0.6, ribbon, Matrix.Translation((x, y, z)))
+            z += 2.4
+        b.box(4.6, 0.25, h - 6, x - 0.9, y - 3.55, 4.0, bronze)   # curtain walls on the two street faces
+        b.box(0.25, 3.8, h - 6, x + 4.05, y + 0.4, 4.0, bronze)
+        cx, cy = {"front": (x + 2.2, y - 3.7), "east": (x + 4.2, y - 2.0)}[cyl_face]
+        b.cyl(1.0, 1.0, h + 1.5, cx, cy, 0, silver, seg=14)
+        b.prism([(px * 1.03, py * 1.03) for px, py in pts], 0.7, red, Matrix.Translation((x, y, h)))
+        b.sphere(3.0, x, y, h + 0.7, roofglass, sx=1.25, sy=1.1, sz=0.35, seg=12)
+        b.cyl(0.05, 0.04, 4.0, x + 2.0, y + 1.5, h + 0.7, M("#cccccc"), seg=5)
+
+    tower(-6.5, -5.5, 44, "front")
+    tower(-6.0, 6.0, 40, "east")
+    tower(6.0, 6.5, 34, "east")
+    tower(7.5, -2.0, 32, "front")
+
+    # NNPC TOWERS sign on the tallest tower
+    w = text_width("NNPC TOWERS", 0.7)
+    b.text("NNPC TOWERS", 0.7, -6.5 - w / 2 + 0.4, -9.2, 42.2, M("#c8962e"))
+    b.cyl(0.4, 0.4, 0.1, -6.5 - w / 2 - 0.3, -9.1, 42.5, M("#d4a62a"), seg=12, rx=math.pi / 2)
+    b.cyl(0.25, 0.25, 0.12, -6.5 - w / 2 - 0.3, -9.15, 42.5, M("#2e7d32"), seg=12, rx=math.pi / 2)
+
+    # red granite podium (front right) with white lattice balconies
+    b.box(9.5, 5.5, 6.0, 6.5, -8.0, 0, granite)
+    b.box(9.55, 5.55, 0.5, 6.5, -8.0, 3.2, ribbon)
+    for gx in (3.0, 5.3, 7.6, 9.9):
+        y = -10.8
+        for (x0, z0), (x1, z1) in (((-0.8, 1.6), (0.8, 2.8)), ((-0.8, 2.8), (0.8, 1.6)), ((-0.8, 1.6), (0.8, 1.6)), ((-0.8, 2.8), (0.8, 2.8))):
+            b.beam((gx + x0, y, z0), (gx + x1, y, z1), 0.08, white)
+
+    # central octagonal pavilion with ribbed pyramid roof
+    b.cyl(3.2, 3.2, 2.5, -0.5, 1.0, 2.5, granite, seg=8, rz=math.pi / 8)
+    b.cyl(3.8, 0.4, 3.0, -0.5, 1.0, 5.0, white, seg=8, rz=math.pi / 8)
+    for k in range(8):
+        a = k * math.pi / 4 + math.pi / 8
+        b.beam((-0.5 + 3.8 * math.cos(a), 1.0 + 3.8 * math.sin(a), 5.0), (-0.5 + 0.4 * math.cos(a), 1.0 + 0.4 * math.sin(a), 8.0), 0.14, red)
+    b.cyl(0.5, 0.5, 0.7, -0.5, 1.0, 8.0, white, seg=8)
+
+    # glazed space-frame canopies at the tower bases
+    for cx, cy in ((-6.5, -10.4), (-0.5, -6.5)):
+        b.cyl(2.6, 0.3, 2.4, cx, cy, 0, roofglass, seg=4, rz=math.pi / 4)
+        for sx in (-1, 1):
+            for sy in (-1, 1):
+                b.beam((cx + sx * 1.8, cy + sy * 1.8, 0), (cx, cy, 2.4), 0.09, white)
+
+    # Norfolk pines along the street
+    for x in (-11.4, -2.0, 1.6, 11.6):
+        pine(b, x, -11.4, 7.5)
+    for y in (-6.0, 1.0, 8.0):
+        pine(b, 11.6, y, 7.0)
+    b.finish("nnpc_Towers", coll)
+
+
+def wtc(coll):
+    """World Trade Center Abuja: office tower (west) and curved residential tower (east)."""
+    b = Builder()
+    dark, silver, band, col = M("#3b4a5c", 0.25), M("#aeb7c0", 0.3), M("#7d8b99"), M("#5a5f66")
+    gl_low, cream = M("#2d3640", 0.3), M("#efe7da")
+    H = 50.0
+
+    b.box(24, 10, 0.3, 0, 0, 0, M("#cfc6b5"))  # plaza
+
+    # office tower on pilotis
+    ox = -6.0
+    b.box(7.0, 6.0, 5.0, ox, 0, 0.3, gl_low)
+    for x in (-3.4, -1.15, 1.15, 3.4):
+        b.box(0.5, 0.5, 5.0, ox + x, -3.4, 0.3, col)
+    b.box(8.4, 7.2, H - 5, ox, 0, 5.3, dark)
+    b.box(0.08, 7.0, H - 5.6, ox + 4.22, 0, 5.4, silver)
+    z = 6.5
+    while z < H:
+        b.box(8.45, 0.06, 0.18, ox, -3.62, z, band)
+        z += 2.1
+    y = -3.2
+    while y < 3.3:
+        b.box(0.06, 0.06, H - 5.6, ox + 4.27, y, 5.4, M("#c9d0d6"))
+        y += 0.9
+    b.box(5.0, 4.0, 1.6, ox, 0.5, H + 0.3, col)
+
+    # residential tower with wrap-around curved balconies
+    rx = 6.2
+    core = rounded_rect(7.6, 6.6)
+    b.prism(core, H, M("#4a6f93", 0.25), Matrix.Translation((rx, 0, 0.3)))
+    slab = [(x * 1.13, y * 1.15) for x, y in core]
+    z = 3.0
+    while z < H:
+        b.prism(slab, 0.28, cream, Matrix.Translation((rx, 0, z + 0.3)))
+        z += 2.2
+    b.prism([(x * 1.18, y * 1.2) for x, y in core], 0.9, M("#e7dccb"), Matrix.Translation((rx, 0, H + 0.3)))
+    b.box(0.5, 0.2, H - 3, rx, -3.75, 2.0, M("#1f2a36"))
+
+    # low link podium (with the exposed red columns seen in the photos)
+    b.box(5.0, 5.5, 3.2, 0, 1.0, 0.3, M("#bfb8ad"))
+    b.box(4.6, 0.1, 2.4, 0, -1.8, 0.4, gl_low)
+    for x in (-1.6, -0.6, 0.6, 1.6):
+        b.cyl(0.08, 0.08, 2.0, x, 2.0, 3.5, M("#b03a2e"), seg=6)
+
+    for x, y in ((10.9, -4.5), (2.8, -4.4), (-11.0, -4.5)):
+        cypress(b, x, y, 6.5)
+    b.finish("wtc_Towers", coll)
+
+
+def ship_house(coll):
+    """Ship House (Ministry of Defence): a cream concrete 'ship' with bow, decks and funnels."""
+    b = Builder()
+    cream, light, tan, brown = M("#e8dcc0"), M("#f1e8d4"), M("#cfae7f"), M("#a8682e")
+    dark, port, fin_dark = M("#4d4a45", 0.4), M("#5b6e7c", 0.3), M("#b8925f")
+
+    def window_rows(x, w, y, z0, z1, step=2.4):
+        z = z0
+        while z < z1:
+            b.box(w, 0.1, 0.9, x, y, z, brown)
+            b.box(w - 0.4, 0.12, 0.5, x, y - 0.02, z + 0.2, dark)
+            z += step
+
+    # hull (4 floors) with the raised bow on raking struts at the west end
+    b.box(33, 8, 10, 0.5, 0.5, 0, cream)
+    window_rows(0.5, 32.6, -3.52, 1.5, 9.5)
+    b.box(4.0, 7.0, 3.4, -17.8, 0.5, 7.6, cream)
+    for y in (-2.6, 0.5, 3.6):
+        b.beam((-15.6, y, 0), (-19.4, y, 7.6), 0.6, light)
+        b.beam((-15.6, y, 0), (-17.2, y, 7.6), 0.45, light)
+    b.box(3.0, 7.5, 8.0, 17.5, 0.5, 0, cream)  # stern step
+
+    # fins along the hull rise above the roofline
+    x = -15.8
+    while x <= 16.5:
+        b.box(0.25, 0.4, 11.0, x, -3.65, 0.4, light)
+        x += 2.2
+
+    # decks stepping up
+    b.box(25, 6.4, 6.0, -0.5, 1.0, 10, cream)
+    window_rows(-0.5, 24.6, -2.22, 11.2, 15.5)
+    x = -12.5
+    while x <= 11.6:
+        b.box(0.22, 0.35, 7.0, x, -2.35, 10, light)
+        x += 2.2
+    b.box(15, 5.0, 3.6, 1.0, 1.2, 16, cream)
+    window_rows(1.0, 14.6, -1.32, 17.2, 19.0)
+
+    # porthole windows
+    for x, y, z in ((-4, -2.2, 12.6), (-1, -2.2, 14.6), (2.5, -2.2, 12.6), (5.5, -2.2, 14.6),
+                    (8.0, -2.2, 12.6), (-2, -1.3, 18.2), (3, -1.3, 18.2), (-9, -3.5, 8.6), (10, -3.5, 8.6)):
+        b.cyl(0.45, 0.45, 0.12, x, y, z, port, seg=12, rx=math.pi / 2)
+
+    # the two funnel towers
+    for fx, fy, w, d, h in ((-7.5, 0.2, 3.2, 3.6, 25.0), (12.5, 0.8, 2.8, 3.2, 22.0)):
+        b.box(w, d, h, fx, fy, 0, tan)
+        for k in range(4):
+            b.box(0.18, 0.3, h - 3, fx - w / 2 + 0.5 + k * (w - 1) / 3, fy - d / 2 - 0.1, 1.5, fin_dark)
+
+    # curved shell over the entrance
+    for k in range(4):
+        b.box(3.2 - k * 0.3, 0.2, 0.9, 4.0, -4.3 - k * 0.15, 1.0 + k * 0.85, light, rx=math.radians(25 + k * 12))
+
+    # boundary wall, hedge, palms and round bushy trees
+    b.box(38, 0.25, 0.8, 0, -5.0, 0, M("#f2f0ea"))
+    b.box(38, 0.6, 0.6, 0, -4.5, 0, M("#4f7d3a"))
+    for x in (-14, -6, 2, 10, 17):
+        palm(b, x, -4.4, 6.5)
+    for x in (-18, -10, -2, 6, 14):
+        round_tree(b, x, -4.4, s=1.0, col="#6f9e3c")
+    b.finish("ship-house_Building", coll)
+
+
 # ---------------------------------------------------------------- fictional tenants (placeholders)
 
 def atlantic_trust(coll):
@@ -511,21 +990,6 @@ def delta_energy(coll):
     b.finish("delta-energy_Building", coll)
 
 
-def reserve_authority(coll):
-    b = Builder()
-    body, band, acc, stone = M("#8d6e63"), M("#e9dcd5"), M("#2e7d32"), M("#efe8dc")
-    b.box(10.2, 10.2, 2.0, 0, 0, 0, stone)
-    for k in range(7):
-        b.cyl(0.3, 0.3, 4.0, -3.6 + k * 1.2, -4.7, 2.0, stone, seg=10)
-    z = 2.0
-    for w, h in ((9.0, 20), (7.0, 12), (5.0, 8)):
-        banded_box(b, w, w, h, 0, 0.3, z, body, band, step=3.2)
-        z += h
-    b.box(3.0, 3.0, 1.5, 0, 0.3, z, acc)
-    flagpole(b, 2.0, 0.3, z + 6, NIGERIA)
-    b.finish("reserve-authority_Building", coll)
-
-
 def ministry(coll, oid, body_hex, accent_hex):
     b = Builder()
     stone, white, body, acc = M("#efe8dc"), M("#fbf8f2"), M(body_hex), M(accent_hex)
@@ -572,6 +1036,12 @@ def aso_rock(coll):
 
 
 LANDMARKS = {
+    "city-gate": city_gate,
+    "national-mosque": national_mosque,
+    "cbn": cbn,
+    "nnpc": nnpc,
+    "wtc": wtc,
+    "ship-house": ship_house,
     "nrs": nrs,
     "galaxy-backbone": galaxy_backbone,
     "taj-bank": taj_bank,
@@ -581,7 +1051,6 @@ LANDMARKS = {
     "naira-pay": naira_pay,
     "savanna-tel": savanna_tel,
     "delta-energy": delta_energy,
-    "reserve-authority": reserve_authority,
     "min-finance": lambda c: ministry(c, "min-finance", "#e8e0d0", "#2e7d32"),
     "min-digital": lambda c: ministry(c, "min-digital", "#e3e6ee", "#1565c0"),
     "aso-rock": aso_rock,
@@ -627,6 +1096,14 @@ def main(only=None):
 
     root = _child_coll(scn.collection, "Landmarks")
     _find_layer(vl.layer_collection, "Landmarks").exclude = False
+    for c in list(root.children):
+        if c.name not in LANDMARKS:
+            name = c.name
+            _clear(c)
+            bpy.data.collections.remove(c)
+            stale = os.path.join(MODELS, f"{name}.glb")
+            if os.path.exists(stale):
+                os.remove(stale)
     os.makedirs(MODELS, exist_ok=True)
     report = {}
     for oid, fn in LANDMARKS.items():
@@ -647,11 +1124,13 @@ def main(only=None):
     _find_layer(vl.layer_collection, "Landmarks").exclude = True
     ov = _child_coll(scn.collection, "Overview")
     _clear(ov)
-    for oid, (i, j, span) in LAYOUT.items():
+    placements = {oid: ((i + (sx - 1) / 2) * CELL, -(j + (sy - 1) / 2) * CELL, 0.3) for oid, (i, j, sx, sy) in LAYOUT.items()}
+    placements["city-gate"] = CITY_GATE_POS
+    for oid, loc in placements.items():
         inst = bpy.data.objects.new(f"{oid}_instance", None)
         inst.instance_type = "COLLECTION"
         inst.instance_collection = bpy.data.collections[oid]
-        inst.location = ((i + (span - 1) / 2) * CELL, -j * CELL, 0.3)
+        inst.location = loc
         ov.objects.link(inst)
     rock = bpy.data.objects.new("aso-rock_instance", None)
     rock.instance_type = "COLLECTION"
@@ -661,6 +1140,7 @@ def main(only=None):
     gb = Builder()
     gb.box(11 * CELL + 2, 9 * CELL + 2, 0.3, 0, 0, 0, M("#cfc8b8"))
     gb.box(600, 600, 0.1, 0, 0, -0.6, M("#d6cfa8"))
+    gb.box(5, 160, 0.12, 7, -(63 + 80), -0.5, M("#55585d"))  # airport road toward the City Gate
     gb.finish("Ground", ov)
     return report
 
