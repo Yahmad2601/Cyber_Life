@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { CELL, DISTRICTS, BRIDGES, ORGS } from './orgs.js';
+import { CELL, DISTRICTS, ORGS, ASO_ROCK, orgCells, orgCenter } from './orgs.js';
 
 const UNIT = 3; // world units per window-texture tile
 const PALETTE = ['#f4e1c1', '#e9c4a6', '#cfe0e8', '#d8d0e8', '#f2d7d9', '#c9dcc5', '#f0e6b8', '#e4e1dc'];
@@ -225,7 +225,8 @@ function buildOrg(o) {
   sign.position.y = top + 1.4;
   sign.rotation.y = Math.PI / 4;
   g.add(sign);
-  g.position.copy(cellToWorld(...o.cell));
+  const [x, z] = orgCenter(o);
+  g.position.set(x, 0.3, z);
   g.traverse((m) => (m.userData.orgId = o.id));
   return { org: o, group: g, top, sign };
 }
@@ -235,15 +236,17 @@ function buildOrg(o) {
 export function buildCity(scene) {
   const tickers = [];
   const orgEntries = new Map();
-  const occupied = new Set(ORGS.map((o) => o.cell.join(',')));
+  const occupied = new Set(ORGS.flatMap((o) => orgCells(o).map((c) => c.join(','))));
+  const spans = ORGS.filter((o) => o.span);
 
-  const water = new THREE.Mesh(
-    new THREE.PlaneGeometry(800, 800).rotateX(-Math.PI / 2),
-    new THREE.MeshStandardMaterial({ color: '#86c9cf', roughness: 0.35 }),
+  // Abuja is inland: savanna ground instead of water.
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(900, 900).rotateX(-Math.PI / 2),
+    new THREE.MeshStandardMaterial({ color: '#d6cfa8', roughness: 1 }),
   );
-  water.position.y = -0.6;
-  water.receiveShadow = true;
-  scene.add(water);
+  ground.position.y = -0.6;
+  ground.receiveShadow = true;
+  scene.add(ground);
 
   for (const d of Object.values(DISTRICTS)) {
     const [i0, i1] = d.i;
@@ -262,16 +265,21 @@ export function buildCity(scene) {
         if (!occupied.has(`${i},${j}`)) fillBlock(scene, i, j, d);
       }
     }
-    spawnCars(scene, d, tickers);
+    // Multi-block campuses pave over the road between their blocks; keep cars off it.
+    const blocked = spans
+      .filter((o) => o.district === Object.keys(DISTRICTS).find((k) => DISTRICTS[k] === d))
+      .flatMap((o) => {
+        const [sx, sy] = o.span;
+        const [cx, cz] = orgCenter(o);
+        const plate = mesh(new THREE.BoxGeometry(sx * CELL - 3.6, 0.3, sy * CELL - 3.6), flatMat(d.color));
+        plate.position.set(cx, 0.15, cz);
+        scene.add(plate);
+        return Array.from({ length: sx - 1 }, (_, k) => (o.cell[0] + k + 0.5) * CELL);
+      });
+    spawnCars(scene, d, tickers, blocked);
   }
 
-  for (const [x0, x1, z0, z1] of BRIDGES) {
-    const len = Math.max(x1 - x0, z1 - z0) + 4;
-    const alongX = x1 - x0 > z1 - z0;
-    const b = mesh(new THREE.BoxGeometry(alongX ? len : 4, 0.6, alongX ? 4 : len), flatMat('#bdb6a8'));
-    b.position.set((x0 + x1) / 2, -0.1, (z0 + z1) / 2);
-    scene.add(b);
-  }
+  addOutskirts(scene);
 
   for (const o of ORGS) {
     const entry = buildOrg(o);
@@ -323,13 +331,13 @@ function fillBlock(scene, i, j, d) {
   }
 }
 
-function spawnCars(scene, d, tickers) {
+function spawnCars(scene, d, tickers, blockedX = []) {
   const [i0, i1] = d.i;
   const [j0, j1] = d.j;
   const xMin = (i0 - 0.5) * CELL, xMax = (i1 + 0.5) * CELL;
   const zMin = (j0 - 0.5) * CELL, zMax = (j1 + 0.5) * CELL;
   const xLines = [], zLines = [];
-  for (let i = i0; i < i1; i++) xLines.push((i + 0.5) * CELL);
+  for (let i = i0; i < i1; i++) if (!blockedX.includes((i + 0.5) * CELL)) xLines.push((i + 0.5) * CELL);
   for (let j = j0; j < j1; j++) zLines.push((j + 0.5) * CELL);
 
   for (let k = 0; k < 7; k++) {
@@ -409,35 +417,69 @@ function addSkyLife(scene, tickers) {
   }
 }
 
-// If public/models/<org-id>.glb exists (exported from Blender), use it
-// instead of the procedural placeholder.
+// ---------- Blender models ----------
+// Models come from blender/build_landmarks.py and are authored in world
+// units (1 Blender unit = 1 world unit), so they are used at scale 1.
 const loader = new GLTFLoader();
-async function trySwapModel(entry) {
-  const url = `${import.meta.env.BASE_URL}models/${entry.org.id}.glb`;
+async function loadModel(name) {
+  const url = `${import.meta.env.BASE_URL}models/${name}.glb`;
   try {
     const res = await fetch(url, { method: 'HEAD' });
     const type = res.headers.get('content-type') || '';
-    if (!res.ok || type.includes('text/html')) return;
+    if (!res.ok || type.includes('text/html')) return null; // Vite serves index.html for missing files
+    return (await loader.loadAsync(url)).scene;
   } catch {
-    return;
+    return null;
   }
-  loader.load(url, (gltf) => {
-    const model = gltf.scene;
-    const bbox = new THREE.Box3().setFromObject(model);
-    const size = bbox.getSize(new THREE.Vector3());
-    const s = 10 / Math.max(size.x, size.z); // fit the 10x10 block
-    model.scale.setScalar(s);
-    model.position.y = -bbox.min.y * s;
-    model.traverse((m) => {
-      m.userData.orgId = entry.org.id;
-      if (m.isMesh) m.castShadow = m.receiveShadow = true;
-      if (/beacon/i.test(m.name)) m.userData.blink = true; // e.g. "LagoonTel_Beacon" in Blender
-    });
-    const sign = entry.sign;
-    entry.group.clear();
-    entry.group.add(model);
-    entry.top = size.y * s;
-    sign.position.y = entry.top + 1.4;
-    entry.group.add(sign);
+}
+
+function prepare(model, orgId) {
+  model.traverse((m) => {
+    if (orgId) m.userData.orgId = orgId;
+    if (m.isMesh) m.castShadow = m.receiveShadow = true;
+    if (/beacon/i.test(m.name)) m.userData.blink = true; // e.g. "savanna-tel_Beacon"
+  });
+  return model;
+}
+
+// Swap the procedural placeholder for public/models/<org-id>.glb when present.
+async function trySwapModel(entry) {
+  const model = await loadModel(entry.org.id);
+  if (!model) return;
+  prepare(model, entry.org.id);
+  entry.top = new THREE.Box3().setFromObject(model).max.y; // measured before parenting, so local
+  entry.group.clear();
+  entry.group.add(model);
+  // Real landmarks carry their own signage in the model.
+  if (!entry.org.real) {
+    entry.sign.position.y = entry.top + 1.4;
+    entry.group.add(entry.sign);
+  }
+}
+
+// Savanna scrub around the city and Aso Rock on the horizon.
+function addOutskirts(scene) {
+  const trunkGeo = new THREE.CylinderGeometry(0.2, 0.3, 1.4, 6);
+  const crownGeo = new THREE.SphereGeometry(1.6, 7, 5);
+  const trunkMat = flatMat('#8b6b4a');
+  const crowns = ['#8fa65a', '#7d9a52', '#a3b06a'].map((c) => flatMat(c));
+  for (let k = 0; k < 220; k++) {
+    const a = rand() * Math.PI * 2;
+    const r = range(105, 300);
+    const x = Math.cos(a) * r * 1.1, z = Math.sin(a) * r;
+    if (Math.abs(x) < 85 && Math.abs(z) < 72) continue;
+    const s = range(0.7, 1.4);
+    const trunk = mesh(trunkGeo, trunkMat);
+    trunk.position.set(x, 0.1, z);
+    const crown = mesh(crownGeo, pick(crowns));
+    crown.scale.set(s * 1.3, s * 0.6, s * 1.3); // flat-topped savanna trees
+    crown.position.set(x, 1.3 + s * 0.5, z);
+    scene.add(trunk, crown);
+  }
+  loadModel('aso-rock').then((rock) => {
+    if (!rock) return;
+    rock.position.set(...ASO_ROCK.position);
+    rock.rotation.y = ASO_ROCK.rotationY;
+    scene.add(prepare(rock));
   });
 }

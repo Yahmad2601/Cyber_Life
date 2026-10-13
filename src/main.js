@@ -15,9 +15,13 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
 const VIEW = 120;
 const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 1000);
-camera.position.set(140, 125, 140);
+// Aim slightly behind the city centre so Aso Rock sits on the horizon.
+camera.position.set(125, 125, 125);
+camera.zoom = 0.85;
+camera.updateProjectionMatrix();
 
 const controls = new MapControls(camera, canvas);
+controls.target.set(-30, 0, -30);
 controls.enableDamping = true;
 controls.minZoom = 0.6;
 controls.maxZoom = 4;
