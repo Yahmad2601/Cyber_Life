@@ -460,31 +460,43 @@ async function trySwapModel(entry) {
   }
 }
 
-// Airport Road: dual carriageway out of the city's south edge, past the City Gate.
+// Airport Road: one carriageway each side of the City Gate (see AIRPORT_ROAD).
 function addAirportRoad(scene, tickers) {
-  const { x, z0, z1 } = AIRPORT_ROAD;
+  const { z0, z1, carriageways } = AIRPORT_ROAD;
   const len = z1 - z0;
-  const road = mesh(new THREE.BoxGeometry(6, 0.4, len), flatMat('#6b6e73'));
-  road.position.set(x, -0.4, z0 + len / 2);
-  scene.add(road);
-  const median = mesh(new THREE.BoxGeometry(0.5, 0.5, len), flatMat('#cfc8b8'));
-  median.position.set(x, -0.35, z0 + len / 2);
-  scene.add(median);
-  for (let k = 0; k < 6; k++) {
-    const dir = k % 2 ? 1 : -1;
-    const car = mesh(new THREE.BoxGeometry(0.9, 0.8, 1.6), flatMat(pick(CAR_COLORS)));
-    const cab = mesh(new THREE.BoxGeometry(0.8, 0.5, 0.8), flatMat('#cfe3f0'));
-    cab.position.y = 0.6;
-    car.add(cab);
-    let p = range(z0, z1);
-    const speed = range(9, 14) * dir;
-    scene.add(car);
-    tickers.push((dt) => {
-      p += speed * dt;
-      if (p > z1) p = z0;
-      if (p < z0) p = z1;
-      car.position.set(x + dir * 1.5, 0.2, p);
-    });
+  const dash = new THREE.BoxGeometry(0.15, 0.05, 2);
+  const dashMat = flatMat('#f1efe6');
+  for (const { x, dir } of carriageways) {
+    const road = mesh(new THREE.BoxGeometry(7, 0.4, len), flatMat('#6b6e73'));
+    road.position.set(x, -0.4, z0 + len / 2);
+    scene.add(road);
+    for (const side of [-1, 1]) {
+      const kerb = mesh(new THREE.BoxGeometry(0.35, 0.5, len), flatMat('#cfc8b8'));
+      kerb.position.set(x + side * 3.6, -0.35, z0 + len / 2);
+      scene.add(kerb);
+    }
+    for (let z = z0 + 3; z < z1; z += 5) {
+      const d = new THREE.Mesh(dash, dashMat);
+      d.position.set(x, -0.18, z);
+      scene.add(d);
+    }
+    // two lanes, all traffic flowing the same way
+    for (let k = 0; k < 6; k++) {
+      const lane = k % 2 ? 1.6 : -1.6;
+      const car = mesh(new THREE.BoxGeometry(0.9, 0.8, 1.6), flatMat(pick(CAR_COLORS)));
+      const cab = mesh(new THREE.BoxGeometry(0.8, 0.5, 0.8), flatMat('#cfe3f0'));
+      cab.position.y = 0.6;
+      car.add(cab);
+      let p = range(z0, z1);
+      const speed = range(9, 14) * dir * (lane > 0 ? 1.15 : 1);
+      scene.add(car);
+      tickers.push((dt) => {
+        p += speed * dt;
+        if (p > z1) p = z0;
+        if (p < z0) p = z1;
+        car.position.set(x + lane, 0.2, p);
+      });
+    }
   }
 }
 
@@ -499,8 +511,8 @@ function addOutskirts(scene) {
     const r = range(105, 300);
     const x = Math.cos(a) * r * 1.1, z = Math.sin(a) * r;
     if (Math.abs(x) < 85 && Math.abs(z) < 72) continue;
-    if (Math.abs(x - AIRPORT_ROAD.x) < 6 && z > 60) continue; // road
-    if (x > -26 && x < 8 && z > 84 && z < 116) continue; // City Gate plaza
+    if (z > 60 && AIRPORT_ROAD.carriageways.some((c) => Math.abs(x - c.x) < 7)) continue; // roads
+    if (x > -30 && x < 2 && z > 84 && z < 116) continue; // City Gate plaza
     const s = range(0.7, 1.4);
     const trunk = mesh(trunkGeo, trunkMat);
     trunk.position.set(x, 0.1, z);

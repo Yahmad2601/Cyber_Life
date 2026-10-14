@@ -50,10 +50,11 @@ LAYOUT = {
     "naira-pay": (-2, -4, 1, 1),
     "savanna-tel": (1, -4, 1, 1),
     "delta-energy": (4, -4, 1, 1),
+    "nirsal": (2, -2, 1, 1),
     # Garki
     "ship-house": (-1, 3, 3, 1),
 }
-CITY_GATE_POS = (-9.0, -100.0, 0.0)  # Blender coords of three.js (-9, 0, 100)
+CITY_GATE_POS = (-14.0, -100.0, 0.0)  # Blender coords of three.js (-14, 0, 100)
 ASO_ROCK_POS = (-115.0, 125.0, -0.6)  # Blender coords of three.js (-115, -0.6, -125)
 
 
@@ -902,6 +903,144 @@ def ship_house(coll):
     b.finish("ship-house_Building", coll)
 
 
+def nirsal(coll):
+    """NIRSAL Plc, Tigris Crescent, Maitama: tan stone core, blue curtain wall
+    and a white steel exoskeleton with three peaked roof frames and masts."""
+    b = Builder()
+    tan, groove, glass = M("#c9a96b"), M("#8a7458"), M("#3a78c2", 0.25)
+    mull, sky, white = M("#3c4a5a", 0.4), M("#7fc4e0", 0.2), M("#f4f2ec")
+    orange, blue, dark = M("#e2a531", 0.5), M("#3a7bd5", 0.3), M("#262a30")
+    steel, paving, green = M("#eceef0", 0.3), M("#cfc8b8"), M("#1e7a3c")
+    FL = 1.2  # storey height
+
+    b.box(10.0, 8.6, 0.2, 0, 0, 0, paving)
+
+    # tan stone tower (front left): grooves, porthole window, entrance
+    TX0, TX1, TY0, TY1, TH = -3.6, -0.8, -3.6, 1.2, 14.4
+    b.box(TX1 - TX0, TY1 - TY0, TH - 0.2, (TX0 + TX1) / 2, (TY0 + TY1) / 2, 0.2, tan)
+    b.box(TX1 - TX0 + 0.12, TY1 - TY0 + 0.12, 0.25, (TX0 + TX1) / 2, (TY0 + TY1) / 2, TH, tan)
+    for z in (3.6, 6.9, 9.7, 12.3):
+        b.box(TX1 - TX0 + 0.04, TY1 - TY0 + 0.04, 0.07, (TX0 + TX1) / 2, (TY0 + TY1) / 2, z, groove)
+    px, pz = (TX0 + TX1) / 2, 13.3
+    b.cyl(0.4, 0.4, 0.06, px, TY0, pz, groove, seg=20, rx=math.pi / 2)
+    b.cyl(0.32, 0.32, 0.06, px, TY0 - 0.03, pz, glass, seg=20, rx=math.pi / 2)
+    b.box(0.04, 0.05, 0.64, px, TY0 - 0.1, pz - 0.32, groove)
+    b.box(0.64, 0.05, 0.04, px, TY0 - 0.1, pz - 0.02, groove)
+    b.box(1.2, 0.06, 1.2, px, TY0 - 0.02, 0.2, dark)
+
+    # narrow glass strip down the west side
+    b.box(0.7, 6.0, 11.0, -3.95, 0.4, 0.2, glass)
+    b.box(0.8, 6.1, 0.2, -3.95, 0.4, 11.2, tan)
+
+    # tan pier between the tower and the curtain wall
+    b.box(1.2, 7.15, 13.8, -0.2, -0.175, 0.2, tan)
+    b.box(1.28, 7.2, 0.15, -0.2, -0.175, 14.0, tan)
+
+    # main glass block: mullions and floor bands on the front (-Y) and side (+X)
+    GX0, GX1, GY0, GY1, GH = 0.4, 3.9, -3.4, 3.4, 12.4
+    b.box(GX1 - GX0, GY1 - GY0, GH - 0.2, (GX0 + GX1) / 2, 0, 0.2, glass)
+    for k in range(7):
+        b.box(0.05, 0.06, GH - 0.2, GX0 + 0.05 + k * (GX1 - GX0 - 0.1) / 6, GY0 - 0.03, 0.2, mull)
+    for k in range(10):
+        b.box(0.06, 0.05, GH - 0.2, GX1 + 0.03, GY0 + 0.9 + k * (GY1 - GY0 - 1.0) / 9, 0.2, mull)
+    z = 0.2 + FL
+    while z < GH - 0.2:
+        b.box(GX1 - GX0, 0.08, 0.1, (GX0 + GX1) / 2, GY0 - 0.04, z, mull)
+        b.box(0.08, GY1 - GY0, 0.1, GX1 + 0.04, 0, z, mull)
+        z += FL
+    b.box(2.0, 0.06, 1.1, 2.1, GY0 - 0.06, 0.2, dark)  # lobby doors
+    b.box(2.6, 0.8, 0.1, 2.1, GY0 - 0.4, 1.4, white)    # entrance canopy
+
+    # chamfered tan corner pier with small white windows
+    cx, cy = GX1 - 0.1, GY0 + 0.25
+    b.box(1.3, 0.9, 13.8, cx, cy, 0.2, tan, rz=math.pi / 4)
+    ox, oy = cx + 0.707 * 0.47, cy - 0.707 * 0.47
+    z = 0.8
+    while z < 13.4:
+        b.box(0.32, 0.04, 0.4, ox, oy, z, white, rz=math.pi / 4)
+        z += FL
+    b.box(1.4, 1.0, 0.15, cx, cy, 14.0, tan, rz=math.pi / 4)
+
+    # setback penthouse with orange / blue panels and a glass balustrade
+    PZ, PH = GH, 1.2
+    b.box(GX1 - GX0 + 0.1, GY1 - GY0 + 0.1, 0.1, (GX0 + GX1) / 2, 0, PZ, tan)
+    b.box(GX1 - GX0 - 0.3, GY1 - GY0 - 0.5, PH, (GX0 + GX1) / 2 - 0.1, 0.25, PZ + 0.1, sky)
+    pal = [orange, None, blue, None]
+    for k in range(6):
+        if pal[k % 4]:
+            b.box(0.48, 0.04, PH - 0.1, GX0 + 0.3 + k * 0.55, GY0 + 0.48, PZ + 0.15, pal[k % 4])
+    for k in range(10):
+        if pal[(k + 1) % 4]:
+            b.box(0.04, 0.48, PH - 0.1, GX1 - 0.42, GY0 + 0.8 + k * 0.58, PZ + 0.15, pal[(k + 1) % 4])
+    b.box(GX1 - GX0 - 0.6, 0.03, 0.4, (GX0 + GX1) / 2 - 0.3, GY0 + 0.05, PZ + 0.1, sky)
+    b.box(GX1 - GX0 - 0.6, 0.08, 0.04, (GX0 + GX1) / 2 - 0.3, GY0 + 0.05, PZ + 0.5, white)
+    b.box(GX1 - GX0 + 0.1, GY1 - GY0 + 0.1, 0.2, (GX0 + GX1) / 2, 0, PZ + PH + 0.1, tan)
+
+    # ---- white steel exoskeleton ----
+    FY0, FY1, TOP = -4.2, 4.0, 15.0
+    front = [(-4.8, FY0), (-0.6, FY0), (1.2, FY0), (3.0, FY0), (4.9, FY0)]
+    right = [(4.9, FY0), (4.9, -1.4), (4.9, 1.3), (4.9, FY1)]
+    back = [(4.9, FY1), (3.0, FY1), (1.2, FY1), (-0.6, FY1), (-4.8, FY1)]
+    left = [(-4.8, FY1), (-4.8, 0.0), (-4.8, FY0)]
+    col, ring, brace, tie = 0.16, 0.11, 0.08, 0.05
+    for x, y in {*front, *right, *back, *left}:
+        b.beam((x, y, 0.2), (x, y, TOP), col, steel)
+    for face in (front[1:], right, back, left):  # the tower's stone front stays unbraced
+        for (x0, y0), (x1, y1) in zip(face, face[1:]):
+            b.beam((x0, y0, 7.6), (x1, y1, 7.6), ring, steel)
+            for z0, z1 in ((0.2, 7.6), (7.6, TOP)):  # one big X per band reads as diamonds
+                b.beam((x0, y0, z0), (x1, y1, z1), brace, steel)
+                b.beam((x1, y1, z0), (x0, y0, z1), brace, steel)
+    for face in (front, right, back, left):
+        for (x0, y0), (x1, y1) in zip(face, face[1:]):
+            b.beam((x0, y0, TOP), (x1, y1, TOP), ring, steel)
+    for x, _ in front[1:4]:  # tie-backs to the curtain wall
+        for z in (7.6, TOP):
+            b.beam((x, FY0, z), (x, GY0, z), tie, steel)
+
+    def hip(base, apex, mast):
+        """Pyramid (one apex) or ridged hip (two apexes) over a base rectangle at TOP."""
+        to = apex if len(apex) == 2 else [apex[0]] * 2
+        tops = [to[0], to[1], to[1], to[0]]
+        if len(apex) == 2:
+            b.beam(apex[0], apex[1], brace, steel)
+        mids = []
+        for (x, y), t in zip(base, tops):
+            b.beam((x, y, TOP), t, brace, steel)
+            mids.append(((x + t[0]) / 2, (y + t[1]) / 2, (TOP + t[2]) / 2))
+        for i in range(4):
+            (x0, y0), (x1, y1) = base[i], base[(i + 1) % 4]
+            m = ((x0 + x1) / 2, (y0 + y1) / 2, TOP)
+            b.beam(mids[i], mids[(i + 1) % 4], tie, steel)
+            b.beam(m, mids[i], tie, steel)
+            b.beam(m, mids[(i + 1) % 4], tie, steel)
+            b.beam((x0, y0, TOP), (x1, y1, TOP), ring, steel)
+        for x, y, z in apex:
+            b.cyl(0.05, 0.03, mast, x, y, z, steel, seg=6)
+
+    hip([(-4.8, FY0), (-0.6, FY0), (-0.6, 0.6), (-4.8, 0.6)], [(-2.7, -1.8, 18.2)], 1.6)
+    hip([(-0.6, FY0), (3.0, FY0), (3.0, FY1), (-0.6, FY1)], [(0.6, -0.1, 19.2), (1.8, -0.1, 19.2)], 1.5)
+    hip([(3.0, -1.4), (4.9, -1.4), (4.9, FY1), (3.0, FY1)], [(3.95, 1.3, 17.5)], 1.1)
+    b.beam((-2.7, -1.8, 17.4), (0.6, -0.1, 18.6), tie, steel)
+    b.beam((1.8, -0.1, 18.4), (3.95, 1.3, 17.0), tie, steel)
+    for x, y, dx in ((-4.8, FY0, -0.6), (4.9, FY0, 0.6), (4.9, FY1, 0.6), (-4.8, FY1, -0.6)):  # lamp arms
+        b.beam((x, y, 14.2), (x + dx, y, 14.2), tie, steel)
+        b.box(0.18, 0.18, 0.12, x + dx, y, 14.0, steel)
+
+    # NIRSAL sign board by the gate, as in the photo, plus hedge and trees
+    sx, sy = 2.9, -4.85
+    for d in (-0.9, 0.9):
+        b.box(0.1, 0.1, 0.9, sx + d, sy + 0.05, 0.2, steel)
+    b.box(2.2, 0.1, 0.7, sx, sy, 1.0, white)
+    b.box(2.2, 0.11, 0.08, sx, sy, 1.0, green)
+    w = text_width("NIRSAL", 0.42)
+    b.text("NIRSAL", 0.42, sx - w / 2, sy - 0.06, 1.25, green, depth=0.03)
+    b.box(4.0, 0.4, 0.45, -2.6, -4.85, 0.2, M("#4f7d3a"))
+    for x, y in ((-4.6, 4.6), (4.6, 4.6)):
+        round_tree(b, x, y, s=0.6, col="#6f9e3c")
+    b.finish("nirsal_Building", coll)
+
+
 # ---------------------------------------------------------------- fictional tenants (placeholders)
 
 def atlantic_trust(coll):
@@ -1045,6 +1184,7 @@ LANDMARKS = {
     "nrs": nrs,
     "galaxy-backbone": galaxy_backbone,
     "taj-bank": taj_bank,
+    "nirsal": nirsal,
     "atlantic-trust": atlantic_trust,
     "maitama-capital": maitama_capital,
     "zuma-mutual": zuma_mutual,
@@ -1140,7 +1280,8 @@ def main(only=None):
     gb = Builder()
     gb.box(11 * CELL + 2, 9 * CELL + 2, 0.3, 0, 0, 0, M("#cfc8b8"))
     gb.box(600, 600, 0.1, 0, 0, -0.6, M("#d6cfa8"))
-    gb.box(5, 160, 0.12, 7, -(63 + 80), -0.5, M("#55585d"))  # airport road toward the City Gate
+    for x in (7, -35):  # Airport Road carriageways (inbound east, outbound west of the City Gate)
+        gb.box(7, 160, 0.12, x, -(63 + 80), -0.5, M("#55585d"))
     gb.finish("Ground", ov)
     return report
 

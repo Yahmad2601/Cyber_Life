@@ -22,7 +22,7 @@ npm run dev
   with the surroundings seen in the photos:
   - Organisations you can run drills against: Central Bank of Nigeria, NNPC Towers,
     World Trade Center, Nigeria Revenue Service, Galaxy Backbone, Ship House
-    (Ministry of Defence) and TAJBank.
+    (Ministry of Defence), TAJBank and NIRSAL Plc.
   - Landmarks with information only: the National Mosque and the City Gate.
 - Fictional placeholder tenants (mostly in Maitama, behind the CBD) and two demo ministries.
 - Click a tower to open its panel. Then run a **Phishing** or **BEC** drill: an attack

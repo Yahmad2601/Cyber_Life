@@ -22,8 +22,17 @@ export const DISTRICTS = {
 // Aso Rock backdrop, placed behind the city as seen from the default camera.
 export const ASO_ROCK = { position: [-115, -0.6, -125], rotationY: 0 };
 
-// Airport Road: leaves the city's south edge and passes the City Gate.
-export const AIRPORT_ROAD = { x: 7, z0: 63, z1: 260 };
+// Airport Road: two one-way carriageways leave the city's south edge with the
+// City Gate between them. Traffic drives on the right, so the east carriageway
+// carries vehicles entering the city and the west one carries those leaving.
+export const AIRPORT_ROAD = {
+  z0: 63,
+  z1: 260,
+  carriageways: [
+    { x: 7, dir: -1, name: 'inbound' }, // dir: -1 = towards the city (decreasing z)
+    { x: -35, dir: 1, name: 'outbound' },
+  ],
+};
 
 export const ORGS = [
   // --- Real Abuja organisations --------------------------------------------
@@ -34,6 +43,7 @@ export const ORGS = [
   { id: 'nrs', real: true, name: 'Nigeria Revenue Service', short: 'NRS', sector: 'Revenue Authority', district: 'cbd', cell: [4, -1], type: 'slab', height: 46, color: '#4f8fd8', accent: '#d71920', domain: 'nrs.gov.ng', staff: 2800, ceo: 'Amina Lawal', posture: 64 },
   { id: 'ship-house', real: true, name: 'Ministry of Defence (Ship House)', short: 'MoD', sector: 'Government', district: 'garki', cell: [-1, 3], span: [3, 1], type: 'slab', height: 22, color: '#e8dcc0', accent: '#cfae7f', domain: 'defence.gov.ng', staff: 3000, ceo: 'Sadiq Umar', posture: 53 },
   { id: 'taj-bank', real: true, name: 'TAJBank', short: 'TAJ', sector: 'Non-interest Banking', district: 'maitama', cell: [-1, -3], type: 'slab', height: 14, color: '#4a4d52', accent: '#d71f26', domain: 'tajbank.com', staff: 600, ceo: 'Yusuf Abdullahi', posture: 58 },
+  { id: 'nirsal', real: true, name: 'NIRSAL Plc', short: 'NIRSAL', sector: 'Agricultural Finance', district: 'maitama', cell: [2, -2], type: 'slab', height: 15, color: '#c9a96b', accent: '#1e7a3c', domain: 'nirsal.com', staff: 700, ceo: 'Aliyu Mohammed', posture: 60 },
 
   // --- Fictional tenants ----------------------------------------------------
   { id: 'min-finance', name: 'Ministry of Finance (demo)', short: 'MoF', sector: 'Government', district: 'cbd', cell: [-4, 1], type: 'civic', height: 12, color: '#e8e0d0', accent: '#2e7d32', domain: 'finance.demo.gov.ng', staff: 1500, ceo: 'Hauwa Bello', posture: 47 },
@@ -49,7 +59,7 @@ export const ORGS = [
 // Public landmarks: modelled and labelled, but not tenants, so no drills.
 export const LANDMARKS = [
   { id: 'national-mosque', landmark: true, name: 'Abuja National Mosque', short: 'National Mosque', district: 'cbd', cell: [-4, -1], span: [2, 2], blurb: 'Golden-domed mosque with four minarets, on Independence Avenue in the Central Business District.' },
-  { id: 'city-gate', landmark: true, name: 'Abuja City Gate', short: 'City Gate', position: [-9, -0.6, 100], blurb: '"You are welcome." This monumental gateway stands on the Airport Road at the entrance to the FCT.' },
+  { id: 'city-gate', landmark: true, name: 'Abuja City Gate', short: 'City Gate', position: [-14, -0.6, 100], blurb: '"You are welcome." This monumental gateway stands on the Airport Road at the entrance to the FCT.' },
 ];
 
 export const PLACES = [...ORGS, ...LANDMARKS];
