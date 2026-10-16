@@ -53,6 +53,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .bar span { display: block; height: 100%; border-radius: 4px; transition: width 0.6s; }
 .last { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
 .cta { margin: 20px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.shift-btn {
+  width: 100%; margin-top: 18px; padding: 14px; border: 0; border-radius: 10px; background: var(--accent); color: #fff;
+  display: flex; flex-direction: column; gap: 2px; text-align: left; transition: transform 0.15s, filter 0.15s;
+}
+.shift-btn:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.12); }
+.shift-btn span { font-size: 12px; opacity: 0.8; }
 .drills { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .drills button {
   text-align: left; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: #fff;

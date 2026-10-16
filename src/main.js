@@ -3,6 +3,7 @@ import { MapControls } from 'three/examples/jsm/controls/MapControls.js';
 import { DISTRICTS, ORGS, PLACES } from './orgs.js';
 import { buildCity } from './city.js';
 import { openDrill } from './drill.js';
+import { startShift } from './office/shell.js';
 import './style.css';
 
 // ---------- renderer / scene / camera ----------
@@ -179,13 +180,28 @@ function renderPanel(o) {
       <div class="bar"><span style="width:${o.posture}%;background:${postureColor(o.posture)}"></span></div>
       ${o.lastDrill ? `<p class="last">Last drill: ${o.lastDrill.kind} · you scored ${o.lastDrill.score}</p>` : ''}
     </div>
-    <p class="cta">Simulate an attack on this tower</p>
+    <button class="shift-btn" data-shift><b>Start a shift</b><span>Work 09:00–17:00 at your ${o.short} desk: Mail, Chat, Phone and IT Helpdesk</span></button>
+    <p class="cta">Or run a quick drill</p>
     <div class="drills">
       <button data-drill="phishing"><b>Phishing</b><span>Credential-harvest email</span></button>
       <button data-drill="bec"><b>BEC</b><span>CEO payment fraud</span></button>
     </div>`;
   panel.querySelector('.close').addEventListener('click', closePanel);
   panel.querySelectorAll('[data-drill]').forEach((b) => b.addEventListener('click', () => runDrill(o, b.dataset.drill)));
+  panel.querySelector('[data-shift]').addEventListener('click', () => runShift(o));
+}
+
+let inShift = false;
+async function runShift(o) {
+  if (drilling) return;
+  drilling = inShift = true;
+  const score = await startShift(o);
+  inShift = false;
+  o.posture = Math.round(o.posture * 0.8 + score * 0.2);
+  o.lastDrill = { kind: 'Shift', score };
+  refreshLabel(o);
+  drilling = false;
+  if (selected === o.id) renderPanel(o);
 }
 
 async function runDrill(o, kind) {
@@ -260,6 +276,7 @@ function impact(entry, at, done) {
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
+  if (inShift) return; // the office desktop covers the city
   const t = clock.elapsedTime;
   idle += dt;
   if (idle > 6 && !selected && !drilling) controls.autoRotate = true;

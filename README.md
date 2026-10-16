@@ -29,6 +29,11 @@ npm run dev
   packet arcs in, the tower flashes, and an inbox opens. The player clicks the red
   flags and picks a response, then gets a scored debrief. The result feeds back into
   the org's human-risk posture.
+- Or **Start a shift**: a full-screen office desktop (Mail, Chat, Phone, IT Helpdesk)
+  from 09:00 to 17:00. Normal work arrives alongside hidden attacks (fake IT phish,
+  MFA-code theft on chat, supplier bank-change fraud and CEO BEC). Each attack is
+  beaten by checking through a second channel (the staff directory, a colleague or the
+  Service Desk) and then reporting it.
 
 | File | Purpose |
 |---|---|
@@ -37,6 +42,10 @@ npm run dev
 | `src/scenarios.js` | Drill content (red flags, actions, feedback) |
 | `src/drill.js` | Inbox UI, scoring, debrief |
 | `src/main.js` | Renderer, camera, picking, panel, attack animation |
+| `src/office/shell.js` | Office shift: desktop, windows, taskbar, game clock, shared shift state |
+| `src/office/world.js` | Shift script: cast, staff directory, threats, tasks, timeline |
+| `src/office/apps/*.js` | Mail, Chat, Phone, IT Helpdesk and the link browser |
+| `src/office/debrief.js` | End-of-shift scoring and report |
 | `blender/build_landmarks.py` | Builds every landmark and exports `public/models/*.glb` |
 | `blender/cyberlife.blend` | Shared Blender file (scene **CyberLife**) |
 
