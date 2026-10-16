@@ -24,3 +24,6 @@ npm-debug.log*
 Thumbs.db
 desktop.ini
 blender/nirsal_previews/
+
+# Packaged builds for upload
+release/

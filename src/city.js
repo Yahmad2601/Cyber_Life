@@ -426,10 +426,10 @@ function addSkyLife(scene, tickers) {
 const loader = new GLTFLoader();
 async function loadModel(name) {
   const url = `${import.meta.env.BASE_URL}models/${name}.glb`;
+  // Load directly rather than probing with HEAD first: some shared-hosting
+  // firewalls reject HEAD. A missing file (404, or an HTML fallback page) fails
+  // to parse and drops through to the procedural placeholder.
   try {
-    const res = await fetch(url, { method: 'HEAD' });
-    const type = res.headers.get('content-type') || '';
-    if (!res.ok || type.includes('text/html')) return null; // Vite serves index.html for missing files
     return (await loader.loadAsync(url)).scene;
   } catch {
     return null;
