@@ -1,4 +1,4 @@
-import { esc, fmt, h, initials } from '../util.js';
+import { esc, fmt, h, initials, GLYPH } from '../util.js';
 
 // Team chat. You reply by picking a suggested message. In a direct message the
 // suggestions are the questions you can ask that person (shared with Phone).
@@ -60,8 +60,8 @@ export function createChat(ctx) {
     main.innerHTML = `
       <header class="chat-head">
         <div><b>${esc(c.title)}</b>${c.external ? ' <em class="ext">External</em>' : ''}<span>${esc(c.sub)}</span></div>
-        ${c.who ? `<button class="btn ghost small" data-call>📞 Call</button>` : ''}
-        ${c.external ? `<button class="btn ghost small" data-report>${c.blocked ? 'Blocked' : '⚑ Report & block'}</button>` : ''}
+        ${c.who ? `<button class="btn ghost small" data-call>${GLYPH.call}<span>Call</span></button>` : ''}
+        ${c.external ? `<button class="btn ghost small" data-report>${c.blocked ? 'Blocked' : `${GLYPH.shield}<span>Report &amp; block</span>`}</button>` : ''}
       </header>
       ${c.external && !c.blocked ? `<div class="ext-banner">This person is outside ${esc(world.org.short)}. Be careful with links, files and codes.</div>` : ''}
       <div class="msgs">${c.messages

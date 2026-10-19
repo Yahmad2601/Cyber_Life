@@ -146,6 +146,14 @@ export function buildWorld(org) {
         <tr><th>Item</th><td>October stationery &amp; toner</td></tr><tr><th>Total</th><td>₦1,240,000</td></tr>
         <tr><th>Pay to</th><td>${vendor.bank}</td></tr></table>`,
     },
+    'file://handbook.pdf': {
+      kind: 'doc', title: 'Staff handbook 2026.pdf',
+      html: `<h3>${org.name}: Staff handbook 2026</h3><p><b>Section 7: Information security</b></p>
+        <p>7.1 Never share your password, PIN or one-time sign-in codes with anyone, including IT staff.</p>
+        <p>7.2 Check unexpected requests through a channel you already trust: the staff directory, your line manager or the IT Service Desk (ext. 4357).</p>
+        <p>7.3 Report suspicious emails with "Report phishing" in Mail, and suspicious chats with "Report &amp; block".</p>
+        <p>7.4 If you think you've made a mistake, tell IT straight away. Reporting quickly limits the damage, and no one will be blamed for reporting.</p>`,
+    },
   };
 
   // ---------- mail ----------

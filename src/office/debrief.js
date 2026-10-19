@@ -16,7 +16,8 @@ function threatResult(id, s) {
   return { score: Math.max(0, score), outcome, tone: v && r ? 'good' : 'ok' };
 }
 
-export function showDebrief(root, ctx) {
+// Builds the Shift report window's content. Returns { el, score }.
+export function buildReport(ctx) {
   const { world, s } = ctx;
   const results = Object.entries(world.threats).map(([id, t]) => ({ id, t, r: threatResult(id, s) })).filter((x) => x.r);
   const security = results.length ? results.reduce((n, x) => n + x.r.score, 0) / results.length : 0;
@@ -27,9 +28,9 @@ export function showDebrief(root, ctx) {
   const tone = score >= 80 ? 'good' : score >= 50 ? 'ok' : 'bad';
   const missed = Object.keys(world.threats).length - results.length;
 
-  const card = h(`
-    <div class="office-modal">
-      <div class="card debrief-card">
+  const el = h(`
+    <div class="report-app">
+      <div class="debrief-card">
         <p class="eyebrow">Shift report · ${esc(world.org.name)} · clocked out ${fmt(s.now)}</p>
         <div class="score ${tone}"><b>${score}</b><span>${grade}</span></div>
         <div class="split">
@@ -53,9 +54,8 @@ export function showDebrief(root, ctx) {
         <h3>Your work</h3>
         <ul class="tasks">${taskIds.map((k) => `<li class="${s.done.has(k) ? 'hit' : 'miss'}"><span>${s.done.has(k) ? '✓' : '✗'}</span>${esc(world.tasks[k])}</li>`).join('')}
           ${s.falseAlarms.map((f) => `<li class="miss"><span>!</span>False alarm: reported a genuine item (${esc(f)})</li>`).join('')}</ul>
-        <button class="btn primary wide" data-done>Back to the city</button>
+        <button class="btn primary wide" data-done>Shut down and return to the city</button>
       </div>
     </div>`);
-  root.appendChild(card);
-  return score;
+  return { el, score };
 }

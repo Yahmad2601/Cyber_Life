@@ -1,7 +1,8 @@
-import { digits, esc, fmt, h, initials } from '../util.js';
+import { digits, esc, fmt, h, initials, GLYPH } from '../util.js';
 
 // Desk phone / softphone: keypad, staff directory, recent calls and SMS.
 // Calls are short dialogues; what you can ask comes from world.topics.
+const RING_MS = 15000; // real time, so a call can be answered at any shift speed
 export function createPhone(ctx) {
   const { world, s } = ctx;
   const P = world.people;
@@ -13,10 +14,10 @@ export function createPhone(ctx) {
   let missed = 0;
 
   const el = h(`<div class="phone-app"><div class="phone-screen"></div><nav class="phone-tabs">
-      <button data-tab="keypad">⌗<span>Keypad</span></button>
-      <button data-tab="contacts">☰<span>Directory</span></button>
-      <button data-tab="recents">◷<span>Recents</span></button>
-      <button data-tab="messages">✉<span>Messages</span></button></nav></div>`);
+      <button data-tab="keypad">${GLYPH.keypad}<span>Keypad</span></button>
+      <button data-tab="contacts">${GLYPH.people}<span>Directory</span></button>
+      <button data-tab="recents">${GLYPH.history}<span>Recents</span></button>
+      <button data-tab="messages">${GLYPH.sms}<span>Messages</span></button></nav></div>`);
   const screen = el.querySelector('.phone-screen');
 
   const byNumber = (n) => Object.values(P).find((p) => p.number && digits(p.number) === digits(n) && p.id !== 'me');
@@ -35,13 +36,13 @@ export function createPhone(ctx) {
       screen.innerHTML = `<div class="keypad">
         <div class="typed">${typed ? esc(typed) : '<span>Enter a number or extension</span>'}</div>
         <div class="keys">${'123456789*0#'.split('').map((k) => `<button data-key="${k}">${k}</button>`).join('')}</div>
-        <div class="key-row"><button class="dial" data-dial aria-label="Call">📞</button><button class="back" data-back aria-label="Delete">⌫</button></div></div>`;
+        <div class="key-row"><button class="dial" data-dial aria-label="Call">${GLYPH.call}</button><button class="back" data-back aria-label="Delete">${GLYPH.backspace}</button></div></div>`;
     }
     if (tab === 'contacts') {
       screen.innerHTML = `<div class="pane-head">Staff directory</div><ul class="dir">${world.directory
         .map(
           (p) => `<li><span class="avatar">${initials(p.name)}</span><span class="who"><b>${esc(p.name)}</b><span>${esc(p.role)}</span><span class="num">${pretty(digits(p.number))}${p.external ? ' · external' : ''}</span></span>
-            <span class="acts"><button data-callp="${p.id}" title="Call">📞</button>${p.external ? '' : `<button data-chatp="${p.id}" title="Chat">💬</button>`}</span></li>`,
+            <span class="acts"><button data-callp="${p.id}" title="Call">${GLYPH.call}</button>${p.external ? '' : `<button data-chatp="${p.id}" title="Chat">${GLYPH.bubble}</button>`}</span></li>`,
         )
         .join('')}</ul>`;
     }
@@ -51,7 +52,7 @@ export function createPhone(ctx) {
       screen.innerHTML = `<div class="pane-head">Recent calls</div><ul class="recents">${
         recents.length
           ? recents
-              .map((r) => `<li class="${r.dir}"><span>${r.dir === 'in' ? '↙' : r.dir === 'out' ? '↗' : '✕'}</span><b>${esc(r.who ? P[r.who].name : pretty(r.number))}</b><time>${fmt(r.at)}</time><button data-num="${r.number}">📞</button></li>`)
+              .map((r) => `<li class="${r.dir}"><span>${r.dir === 'in' ? GLYPH.callIn : r.dir === 'out' ? GLYPH.callOut : GLYPH.close}</span><b>${esc(r.who ? P[r.who].name : pretty(r.number))}</b><time>${fmt(r.at)}</time><button data-num="${r.number}" title="Call back">${GLYPH.call}</button></li>`)
               .join('')
           : '<li class="empty">No calls yet</li>'
       }</ul>`;
@@ -116,7 +117,7 @@ export function createPhone(ctx) {
       missed++;
       return;
     }
-    call = { who: ev.from, number: digits(P[ev.from].number), lines: [], incoming: ev, state: 'ringing', until: ctx.now() + 3 };
+    call = { who: ev.from, number: digits(P[ev.from].number), lines: [], incoming: ev, state: 'ringing', until: performance.now() + RING_MS };
     ctx.open('phone');
     ctx.notify({ app: 'phone', title: `Incoming call · ${P[ev.from].name}`, text: P[ev.from].role, onClick: () => ctx.open('phone') });
     render();
@@ -183,7 +184,7 @@ export function createPhone(ctx) {
       render();
     },
     tick() {
-      if (call?.state === 'ringing' && ctx.now() >= call.until) missCall();
+      if (call?.state === 'ringing' && performance.now() >= call.until) missCall();
     },
     onOpen(arg) {
       if (arg?.call) dial(P[arg.call].number);

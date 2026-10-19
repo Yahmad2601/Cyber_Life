@@ -1,4 +1,4 @@
-import { esc, fmt, h } from '../util.js';
+import { esc, fmt, h, logo, GLYPH } from '../util.js';
 
 const CATEGORIES = {
   suspicious: 'Report a suspicious message',
@@ -17,7 +17,7 @@ export function createHelpdesk(ctx) {
   let next = 3402;
 
   const el = h(`<div class="hd-app">
-      <header class="hd-top"><b>${esc(world.org.short)} IT Helpdesk</b><span class="url">🔒 helpdesk.${esc(world.org.domain)}</span></header>
+      <header class="hd-top">${logo('helpdesk', 'sm')}<b>${esc(world.org.short)} IT Helpdesk</b><span class="url">${GLYPH.globeLock} helpdesk.${esc(world.org.domain)}</span></header>
       <nav class="hd-tabs"><button data-tab="tickets">My tickets</button><button data-tab="new">Raise a ticket</button><button data-tab="announcements">Announcements</button></nav>
       <div class="hd-body"></div></div>`);
   const body = el.querySelector('.hd-body');
@@ -27,7 +27,7 @@ export function createHelpdesk(ctx) {
     if (tab === 'tickets' && open) {
       open.unread = false;
       ctx.badges();
-      body.innerHTML = `<button class="btn ghost small" data-back>← All tickets</button>
+      body.innerHTML = `<button class="btn ghost small" data-back>${GLYPH.back}<span>All tickets</span></button>
         <h3>${esc(open.id)} · ${esc(open.subject)} <span class="status ${open.status.replace(/\s/g, '')}">${esc(open.status)}</span></h3>
         <div class="thread">${open.thread.map((m) => `<div class="post ${m.from === 'You' ? 'mine' : ''}"><div class="meta">${esc(m.from)} · ${fmt(m.at)}</div><p>${esc(m.text)}</p></div>`).join('')}</div>`;
       return;

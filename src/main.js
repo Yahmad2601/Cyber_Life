@@ -180,7 +180,7 @@ function renderPanel(o) {
       <div class="bar"><span style="width:${o.posture}%;background:${postureColor(o.posture)}"></span></div>
       ${o.lastDrill ? `<p class="last">Last drill: ${o.lastDrill.kind} · you scored ${o.lastDrill.score}</p>` : ''}
     </div>
-    <button class="shift-btn" data-shift><b>Start a shift</b><span>Work 09:00–17:00 at your ${o.short} desk: Mail, Chat, Phone and IT Helpdesk</span></button>
+    <button class="shift-btn" data-shift><b>Start a shift</b><span>Open your ${o.short} work laptop (Mirror OS) and work 09:00–17:00</span></button>
     <p class="cta">Or run a quick drill</p>
     <div class="drills">
       <button data-drill="phishing"><b>Phishing</b><span>Credential-harvest email</span></button>
@@ -274,12 +274,14 @@ function impact(entry, at, done) {
 
 // ---------- loop ----------
 const clock = new THREE.Clock();
+let frame = 0;
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
-  if (inShift) return; // the office desktop covers the city
+  // Behind the laptop the city only needs to tick over (~10 fps).
+  if (inShift && frame++ % 6) return;
   const t = clock.elapsedTime;
   idle += dt;
-  if (idle > 6 && !selected && !drilling) controls.autoRotate = true;
+  if (idle > 6 && (inShift || (!selected && !drilling))) controls.autoRotate = true;
   controls.update(dt);
   update(dt, t);
   for (let i = animations.length - 1; i >= 0; i--) if (!animations[i](dt)) animations.splice(i, 1);
